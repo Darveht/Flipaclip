@@ -66,13 +66,14 @@
             background-color: white;
             border-radius: 0.5rem;
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-            margin: 1rem auto;
+            margin: 0 auto;
             display: flex;
             justify-content: center;
             align-items: center;
-            width: calc(100% - 2rem);
-            max-width: 800px;
+            width: 100%;
+            max-width: min(90vw, 600px);
             aspect-ratio: 16 / 9;
+            height: auto;
         }
 
         #drawingCanvas, #onionSkinCanvas, #selectionCanvas {
@@ -80,9 +81,13 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            border: 2px solid #333;
+            border: 1px solid #333;
             background-color: white;
             touch-action: none;
+            width: calc(100% - 8px);
+            height: calc(100% - 8px);
+            max-width: 95%;
+            max-height: 95%;
         }
 
         #drawingCanvas {
@@ -103,12 +108,16 @@
         }
 
         .frame-preview {
-            width: 4rem;
-            height: 4rem;
-            border: 2px solid black;
+            width: 3.5rem;
+            height: 3.5rem;
+            min-width: 3.5rem;
+            border: 2px solid #333;
             border-radius: 0.5rem;
             cursor: pointer;
             position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
 
         .frame-preview.active {
@@ -326,8 +335,20 @@
             box-shadow: 0 0 0 2px white;
         }
 
-        #drawingArea.sidebar-open {
-            margin-left: 80px;
+        @media (min-width: 768px) {
+            #drawingArea.sidebar-open {
+                margin-left: 80px;
+            }
+        }
+        
+        @media (max-width: 767px) {
+            #toolSidebar {
+                width: 70px;
+            }
+            
+            #drawingArea.sidebar-open {
+                margin-left: 70px;
+            }
         }
     </style>
 </head>
@@ -496,7 +517,7 @@
         </div>
 
         <!-- Área de dibujo y animación -->
-        <div class="flex-grow flex justify-center items-center transition-all duration-300" id="drawingArea" style="width:100%; padding-top:140px; padding-bottom:120px;">
+        <div class="flex-grow flex justify-center items-center transition-all duration-300 px-2" id="drawingArea" style="width:100%; padding-top:120px; padding-bottom:140px;">
             <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
                 <canvas id="drawingCanvas"></canvas>
@@ -507,7 +528,7 @@
         <!-- Controles inferiores de diseño -->
         <div class="controls-bottom-bar flex flex-col">
             <div class="timeline-container w-full overflow-x-auto pb-2">
-                <div id="framesContainer" class="flex items-center space-x-2">
+                <div id="framesContainer" class="flex items-center space-x-2 px-2 min-w-full">
                     <!-- Fotogramas se renderizarán aquí -->
                 </div>
             </div>
@@ -656,37 +677,46 @@
 
         // Función mejorada para configurar el tamaño del canvas
         function setCanvasSizeToContainer() {
+            const containerRect = canvasContainer.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
             
             // Calcular dimensiones disponibles
-            const availableWidth = viewportWidth - 32; // margen lateral
-            const availableHeight = viewportHeight - 240; // espacio para barras superior e inferior
+            const availableWidth = Math.min(viewportWidth * 0.9, 600); // 90% del viewport o 600px max
+            const availableHeight = viewportHeight - 280; // espacio para barras superior e inferior
             
             // Mantener aspect ratio 16:9
             const aspectRatio = 16 / 9;
             let canvasWidth, canvasHeight;
             
             if (availableWidth / aspectRatio <= availableHeight) {
-                canvasWidth = Math.min(availableWidth, 800);
+                canvasWidth = availableWidth;
                 canvasHeight = canvasWidth / aspectRatio;
             } else {
-                canvasHeight = Math.min(availableHeight, 450);
+                canvasHeight = availableHeight;
                 canvasWidth = canvasHeight * aspectRatio;
             }
             
-            // Asegurar tamaños mínimos
-            canvasWidth = Math.max(320, canvasWidth);
-            canvasHeight = Math.max(180, canvasHeight);
+            // Asegurar tamaños mínimos para móviles
+            canvasWidth = Math.max(280, canvasWidth);
+            canvasHeight = Math.max(157, canvasHeight);
 
             [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
-                c.style.width = canvasWidth + 'px';
-                c.style.height = canvasHeight + 'px';
                 c.width = canvasWidth;
                 c.height = canvasHeight;
+                c.style.width = '100%';
+                c.style.height = '100%';
                 
                 const cctx = c.getContext('2d');
                 cctx.setTransform(1, 0, 0, 1, 0, 0);
+                
+                // Reconfigurar estilos de dibujo
+                if (c === canvas) {
+                    cctx.lineCap = 'round';
+                    cctx.lineJoin = 'round';
+                    cctx.strokeStyle = currentColor;
+                    cctx.lineWidth = currentSize;
+                }
             });
         }
 
@@ -1478,6 +1508,11 @@
             
             // Click event for frame selection
             frameEl.addEventListener('click', (e) => {
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 if (isPlaying) {
                     pauseAnimation();
                 }
@@ -1516,12 +1551,19 @@
             frameEl.addEventListener('touchstart', (e) => {
                 longPressTimer = setTimeout(() => {
                     isLongPress = true;
+                    e.preventDefault();
                     showFrameContextMenu(e.touches[0], index);
                 }, 500);
             });
 
-            frameEl.addEventListener('touchend', () => {
+            frameEl.addEventListener('touchend', (e) => {
                 clearTimeout(longPressTimer);
+                if (!isLongPress) {
+                    if (isPlaying) {
+                        pauseAnimation();
+                    }
+                    loadFrame(index);
+                }
                 setTimeout(() => { isLongPress = false; }, 100);
             });
 
@@ -1729,10 +1771,10 @@
             const menu = document.createElement('div');
             menu.className = 'frame-context-menu';
             menu.innerHTML = `
-                <button onclick="duplicateFrame(${frameIndex})">
+                <button onclick="duplicateFrame(${frameIndex}); event.stopPropagation();">
                     <i class="fas fa-copy mr-2"></i>Duplicar
                 </button>
-                <button onclick="deleteFrame(${frameIndex})" class="delete" ${frames.length <= 1 ? 'disabled' : ''}>
+                <button onclick="deleteFrame(${frameIndex}); event.stopPropagation();" class="delete" ${frames.length <= 1 ? 'disabled style="opacity: 0.5; pointer-events: none;"' : ''}>
                     <i class="fas fa-trash mr-2"></i>Eliminar
                 </button>
             `;
