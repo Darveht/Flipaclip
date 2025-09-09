@@ -85,15 +85,21 @@
             touch-action: none;
         }
 
+        #drawingCanvas {
+            z-index: 2;
+        }
+
         #onionSkinCanvas {
             opacity: 0.35;
             pointer-events: none;
             border: none;
+            z-index: 1;
         }
         
         #selectionCanvas {
             pointer-events: none;
             border: none;
+            z-index: 3;
         }
 
         .frame-preview {
@@ -315,7 +321,7 @@
         </div>
 
         <!-- Área de dibujo y animación -->
-        <div class="flex-grow flex justify-center items-center" style="width:100%; padding-top:100px; padding-bottom:120px;">
+        <div class="flex-grow flex justify-center items-center" style="width:100%; padding-top:140px; padding-bottom:120px;">
             <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
                 <canvas id="drawingCanvas"></canvas>
@@ -529,8 +535,8 @@
 
         // Nueva función para redibujar el contenido del canvas
         function redrawCanvas() {
-            const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
-            const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+            const canvasWidth = canvas.width;
+            const canvasHeight = canvas.height;
             
             // Limpiar todos los canvas
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -547,12 +553,10 @@
             }
 
             // Redibujar onion skin si está activo
-            if (onionSkinActive && frames[activeFrame - 1]) {
+            if (onionSkinActive && activeFrame > 0 && frames[activeFrame - 1]) {
                 const pimg = new Image();
                 pimg.onload = () => {
-                    onionSkinCtx.globalAlpha = 0.35;
                     onionSkinCtx.drawImage(pimg, 0, 0, canvasWidth, canvasHeight);
-                    onionSkinCtx.globalAlpha = 1;
                 };
                 pimg.src = frames[activeFrame - 1];
             }
@@ -1067,16 +1071,15 @@
             }
 
             // Cargar fotograma actual
-            const currentImg = new Image();
-            currentImg.onload = () => {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-                // Limpiar el historial y guardar el estado inicial del nuevo frame
-                history = [canvas.toDataURL()];
-                historyIndex = 0;
-            };
-            // FIX: si frames[frameIndex] es '' o undefined, no intentamos cargarlo como imagen
             if (frames[frameIndex]) {
+                const currentImg = new Image();
+                currentImg.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+                    // Limpiar el historial y guardar el estado inicial del nuevo frame
+                    history = [canvas.toDataURL()];
+                    historyIndex = 0;
+                };
                 currentImg.src = frames[frameIndex];
             } else {
                 // frame vacío -> lienzo limpio
