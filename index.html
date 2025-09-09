@@ -70,24 +70,23 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            width: 100%;
-            max-width: min(90vw, 600px);
+            width: 90vw;
+            max-width: 600px;
             aspect-ratio: 16 / 9;
             height: auto;
         }
 
         #drawingCanvas, #onionSkinCanvas, #selectionCanvas {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 4px;
+            left: 4px;
+            right: 4px;
+            bottom: 4px;
             border: 1px solid #333;
             background-color: white;
             touch-action: none;
             width: calc(100% - 8px);
             height: calc(100% - 8px);
-            max-width: 95%;
-            max-height: 95%;
         }
 
         #drawingCanvas {
@@ -517,7 +516,7 @@
         </div>
 
         <!-- Área de dibujo y animación -->
-        <div class="flex-grow flex justify-center items-center transition-all duration-300 px-2" id="drawingArea" style="width:100%; padding-top:120px; padding-bottom:140px;">
+        <div class="flex-grow flex justify-center items-center transition-all duration-300 px-2 pt-4 pb-4" id="drawingArea" style="width:100%; min-height: calc(100vh - 280px);">
             <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
                 <canvas id="drawingCanvas"></canvas>
@@ -660,64 +659,43 @@
         let currentSize = 5;
         let currentTool = 'brush';
 
-        // Projects (tu array original mantenido)
-        let projects = [
-            { name: 'animación', time: '00:04', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=animacion', frames: [] },
-            { name: 'kioshi', time: '00:08', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=kioshi', frames: [] },
-            { name: 'abejazz a', time: '00:04', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=abejazz', frames: [] },
-            { name: 'avatar bocetos', time: '00:07', fps: '14 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=avatar+bocetos', frames: [] },
-            { name: 'ejemplo', time: '00:00', fps: '16 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=ejemplo', frames: [] },
-            { name: 'app', time: '00:12', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=app', frames: [] },
-        ];
+        // Projects array (sin ejemplos)
+        let projects = [];
         let currentProjectIndex = null;
 
         // -----------------------
         // --- FIX FUNCTIONS ---
         // -----------------------
 
-        // Función mejorada para configurar el tamaño del canvas
+        // Función simplificada para configurar el tamaño del canvas
         function setCanvasSizeToContainer() {
             const containerRect = canvasContainer.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
             
-            // Calcular dimensiones disponibles
-            const availableWidth = Math.min(viewportWidth * 0.9, 600); // 90% del viewport o 600px max
-            const availableHeight = viewportHeight - 280; // espacio para barras superior e inferior
-            
-            // Mantener aspect ratio 16:9
-            const aspectRatio = 16 / 9;
-            let canvasWidth, canvasHeight;
-            
-            if (availableWidth / aspectRatio <= availableHeight) {
-                canvasWidth = availableWidth;
-                canvasHeight = canvasWidth / aspectRatio;
+            if (containerRect.width === 0 || containerRect.height === 0) {
+                // Si el contenedor no tiene dimensiones, usar valores por defecto
+                const canvasWidth = Math.min(window.innerWidth * 0.9, 600);
+                const canvasHeight = canvasWidth / (16/9);
+                
+                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
+                    c.width = canvasWidth;
+                    c.height = canvasHeight;
+                });
             } else {
-                canvasHeight = availableHeight;
-                canvasWidth = canvasHeight * aspectRatio;
-            }
-            
-            // Asegurar tamaños mínimos para móviles
-            canvasWidth = Math.max(280, canvasWidth);
-            canvasHeight = Math.max(157, canvasHeight);
+                // Usar las dimensiones del contenedor menos el padding
+                const canvasWidth = containerRect.width - 8;
+                const canvasHeight = containerRect.height - 8;
 
-            [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
-                c.width = canvasWidth;
-                c.height = canvasHeight;
-                c.style.width = '100%';
-                c.style.height = '100%';
-                
-                const cctx = c.getContext('2d');
-                cctx.setTransform(1, 0, 0, 1, 0, 0);
-                
-                // Reconfigurar estilos de dibujo
-                if (c === canvas) {
-                    cctx.lineCap = 'round';
-                    cctx.lineJoin = 'round';
-                    cctx.strokeStyle = currentColor;
-                    cctx.lineWidth = currentSize;
-                }
-            });
+                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
+                    c.width = canvasWidth;
+                    c.height = canvasHeight;
+                });
+            }
+
+            // Reconfigurar contexto de dibujo
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = currentSize;
         }
 
         // Función mejorada para asegurar que el canvas esté listo
