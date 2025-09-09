@@ -213,27 +213,6 @@
         .layer-item.swiped .layer-actions {
             right: 0;
         }
-        
-        .tool-button-small {
-            background-color: #f3f4f6;
-            padding: 0.5rem;
-            border-radius: 0.5rem;
-            cursor: pointer;
-            transition: transform 0.2s, background-color 0.2s;
-            font-size: 0.75rem;
-            text-align: left;
-            width: 100%;
-        }
-        
-        .tool-button-small:hover {
-            background-color: #e5e7eb;
-            transform: scale(1.05);
-        }
-        
-        .tool-button-small.active {
-            background-color: #ef4444;
-            color: white;
-        }
     </style>
 </head>
 <body>
@@ -340,38 +319,24 @@
                         <div class="flex items-center space-x-2 p-2 bg-white rounded-lg shadow-lg">
                             <input type="color" id="colorPicker" value="#000000" class="w-8 h-8 rounded-full border-none cursor-pointer">
                             <input type="range" id="brushSize" min="1" max="50" value="5" class="w-24">
-                            <span id="sizeDisplay" class="text-xs">5px</span>
                         </div>
                     </div>
                 </div>
                 <button id="eraserTool" class="tool-button"><i class="fas fa-eraser text-xl"></i></button>
-                <button id="fillTool" class="tool-button"><i class="fas fa-fill-drip text-xl"></i></button>
                 <button id="lassoTool" class="tool-button"><i class="fas fa-draw-polygon text-xl"></i></button>
-                <button id="textTool" class="tool-button"><i class="fas fa-font text-xl"></i></button>
-                <div id="shapesTool" class="relative">
-                    <button class="tool-button"><i class="fas fa-shapes text-xl"></i></button>
-                    <div id="shapesOptions" class="hidden absolute top-1/2 left-full transform -translate-y-1/2 ml-4">
-                        <div class="flex flex-col space-y-2 p-2 bg-white rounded-lg shadow-lg">
-                            <button id="lineTool" class="tool-button-small"><i class="fas fa-minus"></i> Línea</button>
-                            <button id="rectangleTool" class="tool-button-small"><i class="fas fa-square"></i> Rectángulo</button>
-                            <button id="circleTool" class="tool-button-small"><i class="fas fa-circle"></i> Círculo</button>
-                        </div>
-                    </div>
-                </div>
-                <button id="resetTransformTool" class="tool-button" title="Resetear Zoom/Rotación"><i class="fas fa-expand-arrows-alt text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-comment-dots text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-clone text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-font text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-ellipsis-h text-xl"></i></button>
             </div>
         </div>
 
         <!-- Área de dibujo y animación -->
-        <div class="flex-grow flex justify-center items-center overflow-hidden" style="width:100%; height: calc(100vh - 200px); padding: 20px;">
-            <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner relative">
+        <div class="flex-grow flex justify-center items-center" style="width:100%; padding-top:100px; padding-bottom:120px;">
+            <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
                 <canvas id="drawingCanvas"></canvas>
                 <canvas id="selectionCanvas"></canvas>
-                <!-- Indicador de transformación -->
-                <div id="transformIndicator" class="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded hidden">
-                    Zoom: 100% | Rotación: 0°
-                </div>
             </div>
         </div>
 
@@ -463,19 +428,9 @@
         const selectionCtx = selectionCanvas.getContext('2d');
         const brushToolBtn = document.getElementById('brushTool').querySelector('button');
         const eraserToolBtn = document.getElementById('eraserTool');
-        const fillToolBtn = document.getElementById('fillTool');
         const lassoToolBtn = document.getElementById('lassoTool');
-        const textToolBtn = document.getElementById('textTool');
-        const shapesToolBtn = document.getElementById('shapesTool').querySelector('button');
-        const lineToolBtn = document.getElementById('lineTool');
-        const rectangleToolBtn = document.getElementById('rectangleTool');
-        const circleToolBtn = document.getElementById('circleTool');
-        const resetTransformBtn = document.getElementById('resetTransformTool');
         const colorPicker = document.getElementById('colorPicker');
         const brushSize = document.getElementById('brushSize');
-        const sizeDisplay = document.getElementById('sizeDisplay');
-        const brushOptions = document.getElementById('brushOptions');
-        const shapesOptions = document.getElementById('shapesOptions');
         const undoBtn = document.getElementById('undoBtn');
         const redoBtn = document.getElementById('redoBtn');
         const framesContainer = document.getElementById('framesContainer');
@@ -491,7 +446,6 @@
         const addLayerBtn = document.getElementById('addLayerBtn');
         const playIcon = '<i class="fas fa-play"></i> Reproducir';
         const pauseIcon = '<i class="fas fa-pause"></i> Pausar';
-        const transformIndicator = document.getElementById('transformIndicator');
 
         // State variables
         let isDrawing = false;
@@ -508,44 +462,7 @@
         let isMoving = false;
         let selectedImageData = null;
         let selectionStartOffset = {x: 0, y: 0};
-        let fps = 12;
-        
-        // Transform state
-        let canvasTransform = {
-            scale: 1,
-            rotation: 0,
-            translateX: 0,
-            translateY: 0
-        };
-        
-        // Touch gesture state
-        let touchState = {
-            touches: [],
-            initialDistance: 0,
-            initialAngle: 0,
-            initialScale: 1,
-            initialRotation: 0,
-            initialTranslateX: 0,
-            initialTranslateY: 0,
-            gestureMode: null // 'none', 'draw', 'pan', 'zoom', 'rotate'
-        };
-        
-        // Drawing tools state
-        let drawingTools = {
-            brush: { size: 5, color: '#000000', opacity: 1 },
-            eraser: { size: 10 },
-            fill: { color: '#000000' },
-            text: { size: 20, color: '#000000', font: 'Arial' },
-            shapes: { strokeColor: '#000000', fillColor: 'transparent', strokeWidth: 2 }
-        };
-        
-        // Onion skin settings
-        let onionSkinSettings = {
-            enabled: true,
-            framesBefore: 2,
-            framesAfter: 1,
-            opacity: 0.3
-        };
+        let fps = 12; // Nuevo estado para FPS
 
         // Layers state
         let layers = [];
@@ -555,9 +472,6 @@
         let currentColor = '#000000';
         let currentSize = 5;
         let currentTool = 'brush';
-        let isDrawingShape = false;
-        let shapeStartX = 0;
-        let shapeStartY = 0;
 
         // Projects (tu array original mantenido)
         let projects = [
@@ -574,74 +488,12 @@
         // --- FIX FUNCTIONS ---
         // -----------------------
 
-        // =====================================================
-        // TRANSFORM AND GESTURE FUNCTIONS
-        // =====================================================
-        
-        function applyCanvasTransform() {
-            const { scale, rotation, translateX, translateY } = canvasTransform;
-            
-            [ctx, onionSkinCtx, selectionCtx].forEach(context => {
-                context.setTransform(1, 0, 0, 1, 0, 0); // Reset
-                context.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-                context.translate(translateX, translateY);
-                context.scale(scale, scale);
-                context.rotate(rotation * Math.PI / 180);
-            });
-            
-            // Update transform indicator
-            updateTransformIndicator();
-        }
-        
-        function updateTransformIndicator() {
-            const zoomPercent = Math.round(canvasTransform.scale * 100);
-            const rotationDeg = Math.round(canvasTransform.rotation);
-            transformIndicator.textContent = `Zoom: ${zoomPercent}% | Rotación: ${rotationDeg}°`;
-            transformIndicator.classList.toggle('hidden', zoomPercent === 100 && rotationDeg === 0 && canvasTransform.translateX === 0 && canvasTransform.translateY === 0);
-        }
-        
-        function resetCanvasTransform() {
-            canvasTransform = { scale: 1, rotation: 0, translateX: 0, translateY: 0 };
-            applyCanvasTransform();
-        }
-        
-        // Touch gesture helper functions
-        function getTouchDistance(touch1, touch2) {
-            const dx = touch2.clientX - touch1.clientX;
-            const dy = touch2.clientY - touch1.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-        
-        function getTouchAngle(touch1, touch2) {
-            const dx = touch2.clientX - touch1.clientX;
-            const dy = touch2.clientY - touch1.clientY;
-            return Math.atan2(dy, dx) * 180 / Math.PI;
-        }
-        
-        function getTouchCenter(touches) {
-            if (touches.length === 0) return { x: 0, y: 0 };
-            let x = 0, y = 0;
-            for (let touch of touches) {
-                x += touch.clientX;
-                y += touch.clientY;
-            }
-            return { x: x / touches.length, y: y / touches.length };
-        }
-        
-        // MEJORA: Función mejorada para manejar el tamaño del canvas
-        function updateCanvasSize() {
+        // FIX: Set canvas CSS size + backing store size using devicePixelRatio,
+        // and reset transforms so coordinates calculations work correctly.
+        function setCanvasSizeToContainer() {
             const rect = canvasContainer.getBoundingClientRect();
-            let cssW = rect.width;
-            let cssH = rect.height;
-            
-            // FIX: Si el contenedor está oculto o tiene tamaño 0, usar valores por defecto
-            if (cssW === 0 || cssH === 0) {
-                // Calcular tamaño basado en el aspect-ratio del contenedor
-                const maxWidth = Math.min(window.innerWidth - 40, 960); // máximo 960px como en CSS
-                cssW = maxWidth;
-                cssH = maxWidth * (9/16); // aspect-ratio 16:9 como en CSS
-            }
-            
+            const cssW = Math.max(1, rect.width);
+            const cssH = Math.max(1, rect.height);
             const dpr = Math.max(1, window.devicePixelRatio || 1);
 
             [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
@@ -656,45 +508,37 @@
                 cctx.setTransform(1, 0, 0, 1, 0, 0); // reset any existing transform
                 cctx.scale(dpr, dpr); // afterwards all drawing coordinates are in CSS px
             });
-            
-            console.log(`Canvas redimensionado: ${cssW}x${cssH} (DPR: ${dpr})`);
         }
 
-        // MEJORA: Función mejorada para preparar el canvas cuando se abre la pantalla de diseño
+        // FIX: call this whenever design screen is shown or window resizes.
         function ensureCanvasReady() {
-            // Esperamos varios frames para asegurar que el layout esté completamente renderizado
+            // We wait a frame to ensure layout completed if the screen was just shown
             requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    updateCanvasSize();
-                    
-                    // Redibujar frame actual y onion skin si existen
-                    const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
-                    const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
-                    
-                    if (frames[activeFrame]) {
-                        const img = new Image();
-                        img.onload = () => {
-                            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-                            ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-                        };
-                        img.src = frames[activeFrame];
-                    } else {
-                        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-                    }
+                setCanvasSizeToContainer();
+                // redraw current frame & onion if any
+                if (frames[activeFrame]) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        ctx.drawImage(img, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                    };
+                    img.src = frames[activeFrame];
+                } else {
+                    ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                }
 
-                    if (onionSkinActive && frames[activeFrame - 1]) {
-                        const pimg = new Image();
-                        pimg.onload = () => {
-                            onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-                            onionSkinCtx.globalAlpha = 0.35;
-                            onionSkinCtx.drawImage(pimg, 0, 0, canvasWidth, canvasHeight);
-                            onionSkinCtx.globalAlpha = 1;
-                        };
-                        pimg.src = frames[activeFrame - 1];
-                    } else {
-                        onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-                    }
-                });
+                if (onionSkinActive && frames[activeFrame - 1]) {
+                    const pimg = new Image();
+                    pimg.onload = () => {
+                        onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        onionSkinCtx.globalAlpha = 0.35;
+                        onionSkinCtx.drawImage(pimg, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        onionSkinCtx.globalAlpha = 1;
+                    };
+                    pimg.src = frames[activeFrame - 1];
+                } else {
+                    onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                }
             });
         }
 
@@ -797,8 +641,8 @@
 
         // Canvas Drawing Logic
         function initCanvas() {
-            // FIX: No forzamos un canvasSize fijo. Usamos updateCanvasSize
-            updateCanvasSize();
+            // FIX: No forzamos un canvasSize fijo. Usamos setCanvasSizeToContainer
+            setCanvasSizeToContainer();
 
             // Estilos iniciales
             ctx.setTransform(1,0,0,1,0,0); // reset
@@ -813,97 +657,20 @@
         
         // Función para redimensionar los lienzos
         function resizeCanvas() {
-            // FIX: redirige a updateCanvasSize para mantener consistencia
-            updateCanvasSize();
+            // FIX: redirige a setCanvasSizeToContainer para mantener consistencia
+            setCanvasSizeToContainer();
         }
 
-        // MEJORA: Debounce para el resize del window para mejor rendimiento
-        let resizeTimeout;
         window.addEventListener('resize', () => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
-                // Si el diseño está visible, reajustamos los canvas
-                if (!designScreen.classList.contains('hidden')) {
-                    ensureCanvasReady();
-                }
-            }, 150); // Esperar 150ms después del último resize
+            // Si el diseño está visible, reajustamos los canvas
+            if (!designScreen.classList.contains('hidden')) {
+                ensureCanvasReady();
+            }
         });
 
 
-        // =====================================================
-        // FLOOD FILL ALGORITHM
-        // =====================================================
-        
-        function floodFill(startX, startY, fillColor) {
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            const stack = [{x: startX, y: startY}];
-            const targetColor = getPixelColor(data, startX, startY, canvas.width);
-            const replacementColor = hexToRgb(fillColor);
-            
-            // Don't fill if target and replacement colors are the same
-            if (colorsMatch(targetColor, replacementColor)) return;
-            
-            const visited = new Set();
-            
-            while (stack.length > 0) {
-                const {x, y} = stack.pop();
-                const key = `${x},${y}`;
-                
-                if (visited.has(key) || x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) continue;
-                
-                const currentColor = getPixelColor(data, x, y, canvas.width);
-                if (!colorsMatch(currentColor, targetColor)) continue;
-                
-                visited.add(key);
-                setPixelColor(data, x, y, canvas.width, replacementColor);
-                
-                // Add neighboring pixels
-                stack.push({x: x + 1, y}, {x: x - 1, y}, {x, y: y + 1}, {x, y: y - 1});
-            }
-            
-            ctx.putImageData(imageData, 0, 0);
-        }
-        
-        function getPixelColor(data, x, y, width) {
-            const index = (y * width + x) * 4;
-            return {
-                r: data[index],
-                g: data[index + 1],
-                b: data[index + 2],
-                a: data[index + 3]
-            };
-        }
-        
-        function setPixelColor(data, x, y, width, color) {
-            const index = (y * width + x) * 4;
-            data[index] = color.r;
-            data[index + 1] = color.g;
-            data[index + 2] = color.b;
-            data[index + 3] = 255; // Full opacity
-        }
-        
-        function hexToRgb(hex) {
-            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-            return result ? {
-                r: parseInt(result[1], 16),
-                g: parseInt(result[2], 16),
-                b: parseInt(result[3], 16)
-            } : {r: 0, g: 0, b: 0};
-        }
-        
-        function colorsMatch(color1, color2, tolerance = 0) {
-            return Math.abs(color1.r - color2.r) <= tolerance &&
-                   Math.abs(color1.g - color2.g) <= tolerance &&
-                   Math.abs(color1.b - color2.b) <= tolerance;
-        }
-        
-        // =====================================================
-        // IMPROVED DRAWING FUNCTION
-        // =====================================================
-
         function draw(e) {
-            if (!isDrawing && !isDrawingShape) return;
+            if (!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
             const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
             const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
@@ -912,19 +679,20 @@
             const x = (clientX - rect.left) * (canvas.width / rect.width);
             const y = (clientY - rect.top) * (canvas.height / rect.height);
 
-            if (currentTool === 'brush' && isDrawing) {
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            } else if (currentTool === 'eraser' && isDrawing) {
+            if (currentTool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.beginPath();
                 ctx.moveTo(lastX, lastY);
                 ctx.lineTo(x, y);
                 ctx.stroke();
-            } else if (currentTool === 'lasso' && isDrawing) {
+                ctx.globalCompositeOperation = 'source-over';
+            } else if (currentTool === 'brush') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } else if (currentTool === 'lasso') {
                 selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
                 selectionCtx.strokeStyle = '#00f';
                 selectionCtx.setLineDash([5, 5]);
@@ -935,34 +703,13 @@
                 selectionCtx.lineTo(x, y);
                 selectionCtx.stroke();
                 lassoPoints.push({x, y});
-            } else if ((currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') && isDrawingShape) {
-                // Preview shape while drawing
-                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
-                selectionCtx.strokeStyle = currentColor;
-                selectionCtx.lineWidth = drawingTools.shapes.strokeWidth;
-                selectionCtx.setLineDash([5, 5]);
-                
-                if (currentTool === 'line') {
-                    selectionCtx.beginPath();
-                    selectionCtx.moveTo(shapeStartX, shapeStartY);
-                    selectionCtx.lineTo(x, y);
-                    selectionCtx.stroke();
-                } else if (currentTool === 'rectangle') {
-                    const width = x - shapeStartX;
-                    const height = y - shapeStartY;
-                    selectionCtx.strokeRect(shapeStartX, shapeStartY, width, height);
-                } else if (currentTool === 'circle') {
-                    const radius = Math.sqrt(Math.pow(x - shapeStartX, 2) + Math.pow(y - shapeStartY, 2));
-                    selectionCtx.beginPath();
-                    selectionCtx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);
-                    selectionCtx.stroke();
-                }
             }
             
             [lastX, lastY] = [x, y];
-        }"}
+        }
 
         function startDrawing(e) {
+            isDrawing = true;
             const rect = canvas.getBoundingClientRect();
             const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
             const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
@@ -971,86 +718,21 @@
             const y = (clientY - rect.top) * (canvas.height / rect.height);
             [lastX, lastY] = [x, y];
             
-            if (currentTool === 'fill') {
-                // Flood fill tool
-                floodFill(Math.floor(x), Math.floor(y), currentColor);
-                saveToHistory();
-                saveFrame();
-                return;
-            } else if (currentTool === 'text') {
-                // Text tool - show input dialog
-                const text = prompt('Ingrese el texto:');
-                if (text) {
-                    ctx.font = `${drawingTools.text.size}px ${drawingTools.text.font}`;
-                    ctx.fillStyle = drawingTools.text.color;
-                    ctx.fillText(text, x, y);
-                    saveToHistory();
-                    saveFrame();
-                }
-                return;
-            } else if (currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') {
-                // Shape tools
-                isDrawingShape = true;
-                shapeStartX = x;
-                shapeStartY = y;
-                saveToHistory();
-                return;
-            } else if (currentTool === 'lasso') {
-                // Lasso tool
-                isDrawing = true;
+            if (currentTool === 'lasso') {
                 lassoPoints = [{x, y}];
                 selectedImageData = null;
                 deleteSelectionBtn.classList.add('hidden');
-                return;
             } else {
-                // Brush and eraser tools
-                isDrawing = true;
-                saveToHistory();
+                if (historyIndex < history.length - 1) {
+                    history = history.slice(0, historyIndex + 1);
+                }
+                // Guardar el estado actual del lienzo para el historial
+                history.push(canvas.toDataURL());
+                historyIndex++;
             }
-        }
-        
-        function saveToHistory() {
-            if (historyIndex < history.length - 1) {
-                history = history.slice(0, historyIndex + 1);
-            }
-            history.push(canvas.toDataURL());
-            historyIndex++;
         }
 
         function stopDrawing() {
-            if (isDrawingShape) {
-                // Finalize shape drawing
-                const rect = canvas.getBoundingClientRect();
-                const x = lastX;
-                const y = lastY;
-                
-                ctx.strokeStyle = currentColor;
-                ctx.lineWidth = drawingTools.shapes.strokeWidth;
-                ctx.setLineDash([]);
-                
-                if (currentTool === 'line') {
-                    ctx.beginPath();
-                    ctx.moveTo(shapeStartX, shapeStartY);
-                    ctx.lineTo(x, y);
-                    ctx.stroke();
-                } else if (currentTool === 'rectangle') {
-                    const width = x - shapeStartX;
-                    const height = y - shapeStartY;
-                    ctx.strokeRect(shapeStartX, shapeStartY, width, height);
-                } else if (currentTool === 'circle') {
-                    const radius = Math.sqrt(Math.pow(x - shapeStartX, 2) + Math.pow(y - shapeStartY, 2));
-                    ctx.beginPath();
-                    ctx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);
-                    ctx.stroke();
-                }
-                
-                isDrawingShape = false;
-                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
-                saveFrame();
-                return;
-            }
-            
-            if (!isDrawing) return;
             isDrawing = false;
             
             if (currentTool === 'lasso' && lassoPoints.length > 2) {
@@ -1105,7 +787,7 @@
                 deleteSelectionBtn.classList.add('hidden');
             }
 
-            // Save current frame state
+            // Guardar el estado del frame actual (si hay proyecto abierto)
             saveFrame();
         }
 
@@ -1183,184 +865,57 @@
             }
         });
         
-        // =====================================================
-        // IMPROVED TOUCH EVENT HANDLERS WITH GESTURES
-        // =====================================================
-        
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const touches = Array.from(e.touches);
-            touchState.touches = touches;
-            
-            if (touches.length === 1) {
-                // Single touch - drawing or selection
-                touchState.gestureMode = 'draw';
-                if (currentTool === 'lasso' && selectedImageData) {
-                    isMoving = true;
-                    const rect = canvas.getBoundingClientRect();
-                    selectionStartOffset.x = (touches[0].clientX - rect.left) * (canvas.width / rect.width);
-                    selectionStartOffset.y = (touches[0].clientY - rect.top) * (canvas.height / rect.height);
-                } else {
-                    startDrawing(e);
-                }
-            } else if (touches.length === 2) {
-                // Two finger gestures - zoom, pan, rotate
-                touchState.gestureMode = 'gesture';
-                touchState.initialDistance = getTouchDistance(touches[0], touches[1]);
-                touchState.initialAngle = getTouchAngle(touches[0], touches[1]);
-                touchState.initialScale = canvasTransform.scale;
-                touchState.initialRotation = canvasTransform.rotation;
-                touchState.initialTranslateX = canvasTransform.translateX;
-                touchState.initialTranslateY = canvasTransform.translateY;
-                
-                // Stop any drawing
-                if (isDrawing) {
-                    stopDrawing();
-                }
+            if (currentTool === 'lasso' && selectedImageData) {
+                isMoving = true;
+                const rect = canvas.getBoundingClientRect();
+                selectionStartOffset.x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+                selectionStartOffset.y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+            } else {
+                startDrawing(e);
             }
         });
 
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const touches = Array.from(e.touches);
-            
-            if (touchState.gestureMode === 'draw' && touches.length === 1) {
-                if (isMoving) {
-                    handleLassoMove(e);
-                } else {
-                    draw(e);
-                }
-            } else if (touchState.gestureMode === 'gesture' && touches.length === 2) {
-                // Handle two-finger gestures
-                const currentDistance = getTouchDistance(touches[0], touches[1]);
-                const currentAngle = getTouchAngle(touches[0], touches[1]);
-                const currentCenter = getTouchCenter(touches);
-                const initialCenter = getTouchCenter(touchState.touches);
-                
-                // Zoom (pinch)
-                const scaleChange = currentDistance / touchState.initialDistance;
-                canvasTransform.scale = Math.max(0.1, Math.min(5, touchState.initialScale * scaleChange));
-                
-                // Rotation
-                const angleChange = currentAngle - touchState.initialAngle;
-                canvasTransform.rotation = touchState.initialRotation + angleChange;
-                
-                // Pan
-                const centerChangeX = currentCenter.x - initialCenter.x;
-                const centerChangeY = currentCenter.y - initialCenter.y;
-                canvasTransform.translateX = touchState.initialTranslateX + centerChangeX;
-                canvasTransform.translateY = touchState.initialTranslateY + centerChangeY;
-                
-                applyCanvasTransform();
+            if (isMoving) {
+                handleLassoMove(e);
+            } else {
+                draw(e);
             }
         });
 
         canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            const touches = Array.from(e.touches);
-            
-            if (touches.length === 0) {
-                // All fingers lifted
-                if (touchState.gestureMode === 'draw') {
-                    if (isMoving) {
-                        handleLassoMoveEnd(e);
-                    } else {
-                        stopDrawing();
-                    }
-                }
-                touchState.gestureMode = 'none';
-                touchState.touches = [];
-            } else if (touches.length === 1 && touchState.gestureMode === 'gesture') {
-                // From two fingers to one - switch back to drawing mode
-                touchState.gestureMode = 'draw';
-                touchState.touches = touches;
+            if (isMoving) {
+                handleLassoMoveEnd(e);
+            } else {
+                stopDrawing();
             }
         });
 
-        // =====================================================
-        // IMPROVED TOOL SYSTEM
-        // =====================================================
-        
+        // Tool Logic
         function selectTool(tool) {
             currentTool = tool;
-            
-            // Reset all tool buttons
-            [brushToolBtn, eraserToolBtn, fillToolBtn, lassoToolBtn, textToolBtn, shapesToolBtn].forEach(btn => {
-                if (btn) btn.classList.remove('active');
-            });
-            [lineToolBtn, rectangleToolBtn, circleToolBtn].forEach(btn => {
-                if (btn) btn.classList.remove('active');
-            });
-            
-            // Hide all options panels
-            brushOptions.classList.add('hidden');
-            shapesOptions.classList.add('hidden');
-            
-            // Configure tool
-            switch (tool) {
-                case 'brush':
-                    brushToolBtn.classList.add('active');
-                    brushOptions.classList.remove('hidden');
-                    ctx.strokeStyle = currentColor;
-                    ctx.lineWidth = currentSize;
-                    ctx.globalCompositeOperation = 'source-over';
-                    break;
-                case 'eraser':
-                    eraserToolBtn.classList.add('active');
-                    ctx.lineWidth = currentSize * 2;
-                    ctx.globalCompositeOperation = 'destination-out';
-                    break;
-                case 'fill':
-                    fillToolBtn.classList.add('active');
-                    break;
-                case 'lasso':
-                    lassoToolBtn.classList.add('active');
-                    ctx.lineWidth = 1;
-                    break;
-                case 'text':
-                    textToolBtn.classList.add('active');
-                    break;
-                case 'line':
-                case 'rectangle':
-                case 'circle':
-                    shapesToolBtn.classList.add('active');
-                    shapesOptions.classList.remove('hidden');
-                    if (tool === 'line') lineToolBtn.classList.add('active');
-                    if (tool === 'rectangle') rectangleToolBtn.classList.add('active');
-                    if (tool === 'circle') circleToolBtn.classList.add('active');
-                    ctx.strokeStyle = currentColor;
-                    ctx.lineWidth = drawingTools.shapes.strokeWidth;
-                    ctx.globalCompositeOperation = 'source-over';
-                    break;
+            toolButtons.forEach(btn => btn.classList.remove('active'));
+            if (tool === 'brush') {
+                brushToolBtn.classList.add('active');
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            } else if (tool === 'eraser') {
+                eraserToolBtn.classList.add('active');
+                ctx.lineWidth = currentSize * 2;
+            } else if (tool === 'lasso') {
+                lassoToolBtn.classList.add('active');
+                ctx.lineWidth = 1;
             }
-            
-            // Clear selection
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
             deleteSelectionBtn.classList.add('hidden');
         }
 
-        // Tool event listeners
         brushToolBtn.addEventListener('click', () => selectTool('brush'));
         eraserToolBtn.addEventListener('click', () => selectTool('eraser'));
-        fillToolBtn.addEventListener('click', () => selectTool('fill'));
         lassoToolBtn.addEventListener('click', () => selectTool('lasso'));
-        textToolBtn.addEventListener('click', () => selectTool('text'));
-        lineToolBtn.addEventListener('click', () => selectTool('line'));
-        rectangleToolBtn.addEventListener('click', () => selectTool('rectangle'));
-        circleToolBtn.addEventListener('click', () => selectTool('circle'));
-        resetTransformBtn.addEventListener('click', resetCanvasTransform);
-        
-        // Show/hide shapes options
-        shapesToolBtn.addEventListener('click', () => {
-            shapesOptions.classList.toggle('hidden');
-        });
-        
-        // Show/hide brush options
-        brushToolBtn.addEventListener('click', () => {
-            if (currentTool === 'brush') {
-                brushOptions.classList.toggle('hidden');
-            }
-        });
 
         deleteSelectionBtn.addEventListener('click', () => {
             if (selectedImageData) {
@@ -1389,29 +944,19 @@
             }
         });
 
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            if (currentTool === 'brush') {
+                ctx.strokeStyle = currentColor;
+            }
+        });
 
         brushSize.addEventListener('input', (e) => {
-            currentSize = parseInt(e.target.value);
-            sizeDisplay.textContent = currentSize + 'px';
-            drawingTools.brush.size = currentSize;
-            drawingTools.eraser.size = currentSize * 2;
-            
+            currentSize = e.target.value;
             if (currentTool === 'brush') {
                 ctx.lineWidth = currentSize;
             } else if (currentTool === 'eraser') {
                 ctx.lineWidth = currentSize * 2;
-            }
-        });
-        
-        colorPicker.addEventListener('input', (e) => {
-            currentColor = e.target.value;
-            drawingTools.brush.color = currentColor;
-            drawingTools.fill.color = currentColor;
-            drawingTools.text.color = currentColor;
-            drawingTools.shapes.strokeColor = currentColor;
-            
-            if (currentTool === 'brush') {
-                ctx.strokeStyle = currentColor;
             }
         });
 
@@ -1444,44 +989,49 @@
         
         // Animation Logic
         function saveFrame() {
-            // Save current frame and update thumbnail
+            // FIX: guardamos frame sólo si hay proyecto abierto; si no, lo guardamos localmente en frames
             frames[activeFrame] = canvas.toDataURL();
             if (currentProjectIndex !== null) {
                 projects[currentProjectIndex].frames = frames.slice();
             }
-            // Update frame thumbnail immediately
-            updateFramePreviews();
+            // (Opcional) podrías persistir toda la lista de proyectos en localStorage aquí
         }
 
         function loadFrame(frameIndex) {
-            // Save current frame before switching
-            if (activeFrame !== frameIndex) {
-                saveFrame();
-            }
+            // Guardar el fotograma actual antes de cambiar
+            saveFrame();
             activeFrame = frameIndex;
             
-            // Clear canvases
+            // Limpiar
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
             
-            // Load onion skin (multiple frames before and after)
-            if (onionSkinSettings.enabled) {
-                loadOnionSkin(frameIndex);
+            // Cargar capa anterior como 'capa cebolla' si está activa y no es el primer fotograma
+            if (onionSkinActive && frameIndex > 0 && frames[frameIndex - 1]) {
+                const prevImg = new Image();
+                prevImg.onload = () => {
+                    onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+                    onionSkinCtx.drawImage(prevImg, 0, 0, canvas.width, canvas.height);
+                };
+                prevImg.src = frames[frameIndex - 1];
+            } else {
+                onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
             }
 
-            // Load current frame
+            // Cargar fotograma actual
+            const currentImg = new Image();
+            currentImg.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+                // Limpiar el historial y guardar el estado inicial del nuevo frame
+                history = [canvas.toDataURL()];
+                historyIndex = 0;
+            };
+            // FIX: si frames[frameIndex] es '' o undefined, no intentamos cargarlo como imagen
             if (frames[frameIndex]) {
-                const currentImg = new Image();
-                currentImg.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-                    // Reset history for this frame
-                    history = [canvas.toDataURL()];
-                    historyIndex = 0;
-                };
                 currentImg.src = frames[frameIndex];
             } else {
-                // Empty frame - clear canvas
+                // frame vacío -> lienzo limpio
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 history = [canvas.toDataURL()];
                 historyIndex = 0;
@@ -1489,74 +1039,14 @@
 
             updateFramePreviews();
         }
-        
-        function loadOnionSkin(currentFrameIndex) {
-            onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
-            
-            // Load frames before current frame
-            for (let i = 1; i <= onionSkinSettings.framesBefore; i++) {
-                const frameIndex = currentFrameIndex - i;
-                if (frameIndex >= 0 && frames[frameIndex]) {
-                    const img = new Image();
-                    img.onload = () => {
-                        onionSkinCtx.globalAlpha = onionSkinSettings.opacity / i; // Fade more distant frames
-                        onionSkinCtx.globalCompositeOperation = 'multiply';
-                        onionSkinCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        onionSkinCtx.globalCompositeOperation = 'source-over';
-                        onionSkinCtx.globalAlpha = 1;
-                    };
-                    img.src = frames[frameIndex];
-                }
-            }
-            
-            // Load frames after current frame (different color tint)
-            for (let i = 1; i <= onionSkinSettings.framesAfter; i++) {
-                const frameIndex = currentFrameIndex + i;
-                if (frameIndex < frames.length && frames[frameIndex]) {
-                    const img = new Image();
-                    img.onload = () => {
-                        onionSkinCtx.globalAlpha = onionSkinSettings.opacity / (i + 1);
-                        onionSkinCtx.filter = 'hue-rotate(180deg)'; // Different color for future frames
-                        onionSkinCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        onionSkinCtx.filter = 'none';
-                        onionSkinCtx.globalAlpha = 1;
-                    };
-                    img.src = frames[frameIndex];
-                }
-            }
-        }
 
         function addFrame() {
             saveFrame();
-            // Create new empty frame
-            frames.splice(activeFrame + 1, 0, '');
+            // Si el fotograma activo tiene contenido, crea una copia en el siguiente fotograma
+            const nextFrameData = frames[activeFrame] || null;
+            frames.splice(activeFrame + 1, 0, nextFrameData);
             activeFrame++;
             loadFrame(activeFrame);
-            updateFramePreviews();
-        }
-        
-        function duplicateFrame(frameIndex = activeFrame) {
-            saveFrame();
-            const frameData = frames[frameIndex] || '';
-            frames.splice(frameIndex + 1, 0, frameData);
-            activeFrame = frameIndex + 1;
-            loadFrame(activeFrame);
-            updateFramePreviews();
-        }
-        
-        function deleteFrame(frameIndex = activeFrame) {
-            if (frames.length <= 1) {
-                // Don't delete the last frame, just clear it
-                frames[0] = '';
-                activeFrame = 0;
-                loadFrame(activeFrame);
-            } else {
-                frames.splice(frameIndex, 1);
-                if (activeFrame >= frames.length) {
-                    activeFrame = frames.length - 1;
-                }
-                loadFrame(activeFrame);
-            }
             updateFramePreviews();
         }
 
@@ -1569,90 +1059,20 @@
                 frameEl.style.backgroundSize = 'contain';
                 frameEl.style.backgroundPosition = 'center';
                 frameEl.style.backgroundColor = '#fff';
-                frameEl.draggable = true;
-                frameEl.dataset.frameIndex = index;
-                
-                frameEl.innerHTML = `
-                    <span class="frame-number">${index + 1}</span>
-                    <div class="frame-controls absolute inset-0 bg-black bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
-                        <button class="duplicate-frame-btn bg-blue-500 text-white p-1 rounded text-xs" title="Duplicar">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                        <button class="delete-frame-btn bg-red-500 text-white p-1 rounded text-xs" title="Eliminar">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                `;
-                
-                // Frame click to select
-                frameEl.addEventListener('click', (e) => {
-                    if (e.target.closest('.frame-controls')) return; // Don't trigger on control buttons
+                frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
+                frameEl.addEventListener('click', () => {
                     if (isPlaying) {
                         pauseAnimation();
                     }
                     loadFrame(index);
                 });
-                
-                // Duplicate frame
-                frameEl.querySelector('.duplicate-frame-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    duplicateFrame(index);
-                });
-                
-                // Delete frame
-                frameEl.querySelector('.delete-frame-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteFrame(index);
-                });
-                
-                // Drag and drop for reordering
-                frameEl.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/plain', index);
-                    frameEl.classList.add('opacity-50');
-                });
-                
-                frameEl.addEventListener('dragend', () => {
-                    frameEl.classList.remove('opacity-50');
-                });
-                
-                frameEl.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                });
-                
-                frameEl.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                    const targetIndex = index;
-                    
-                    if (sourceIndex !== targetIndex) {
-                        reorderFrame(sourceIndex, targetIndex);
-                    }
-                });
-                
                 framesContainer.appendChild(frameEl);
             });
-            
-            // Scroll to active frame
+            // Desplazar la línea de tiempo para mostrar el fotograma activo
             const activeFrameEl = framesContainer.querySelector('.frame-preview.active');
             if (activeFrameEl) {
                 framesContainer.scrollLeft = activeFrameEl.offsetLeft - (framesContainer.offsetWidth / 2) + (activeFrameEl.offsetWidth / 2);
             }
-        }
-        
-        function reorderFrame(sourceIndex, targetIndex) {
-            const frameData = frames.splice(sourceIndex, 1)[0];
-            frames.splice(targetIndex, 0, frameData);
-            
-            // Adjust active frame index
-            if (activeFrame === sourceIndex) {
-                activeFrame = targetIndex;
-            } else if (sourceIndex < activeFrame && targetIndex >= activeFrame) {
-                activeFrame--;
-            } else if (sourceIndex > activeFrame && targetIndex <= activeFrame) {
-                activeFrame++;
-            }
-            
-            updateFramePreviews();
         }
         
         addFrameBtn.addEventListener('click', () => {
@@ -1690,11 +1110,11 @@
 
         // Onion Skin Logic
         onionSkinBtn.addEventListener('click', () => {
-            onionSkinSettings.enabled = !onionSkinSettings.enabled;
-            onionSkinBtn.classList.toggle('active', onionSkinSettings.enabled);
+            onionSkinActive = !onionSkinActive;
+            onionSkinBtn.classList.toggle('active', onionSkinActive);
             loadFrame(activeFrame);
         });
-        onionSkinBtn.classList.add('active'); // Keep onion skin button active by default
+        onionSkinBtn.classList.add('active'); // Mantiene el botón de la capa cebolla activo
 
         // Layer Panel Logic
         layerBtn.addEventListener('click', () => {
