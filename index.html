@@ -488,12 +488,56 @@
         // --- FIX FUNCTIONS ---
         // -----------------------
 
-        // FIX: Set canvas CSS size + backing store size using devicePixelRatio,
-        // and reset transforms so coordinates calculations work correctly.
+        // Función mejorada para configurar el tamaño del canvas
         function setCanvasSizeToContainer() {
-            const rect = canvasContainer.getBoundingClientRect();
-            const cssW = Math.max(1, rect.width);
-            const cssH = Math.max(1, rect.height);
+            // Si la pantalla de diseño está oculta, usar dimensiones por defecto
+            let cssW, cssH;
+            
+            if (designScreen.classList.contains('hidden')) {
+                // Usar dimensiones basadas en viewport cuando está oculto
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                
+                // Calcular tamaño del contenedor considerando padding y barras
+                const containerMaxWidth = Math.min(960, viewportWidth * 0.9);
+                const containerMaxHeight = (viewportHeight - 220) * 0.8; // 220px para barras superior e inferior
+                
+                // Mantener aspect ratio 16:9
+                const aspectRatio = 16 / 9;
+                if (containerMaxWidth / aspectRatio <= containerMaxHeight) {
+                    cssW = containerMaxWidth;
+                    cssH = containerMaxWidth / aspectRatio;
+                } else {
+                    cssH = containerMaxHeight;
+                    cssW = containerMaxHeight * aspectRatio;
+                }
+            } else {
+                // Usar dimensiones reales del contenedor cuando está visible
+                const rect = canvasContainer.getBoundingClientRect();
+                cssW = rect.width;
+                cssH = rect.height;
+                
+                // Fallback si aún no tiene dimensiones
+                if (cssW === 0 || cssH === 0) {
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    const containerMaxWidth = Math.min(960, viewportWidth * 0.9);
+                    const containerMaxHeight = (viewportHeight - 220) * 0.8;
+                    const aspectRatio = 16 / 9;
+                    
+                    if (containerMaxWidth / aspectRatio <= containerMaxHeight) {
+                        cssW = containerMaxWidth;
+                        cssH = containerMaxWidth / aspectRatio;
+                    } else {
+                        cssH = containerMaxHeight;
+                        cssW = containerMaxHeight * aspectRatio;
+                    }
+                }
+            }
+
+            cssW = Math.max(320, cssW); // Tamaño mínimo
+            cssH = Math.max(180, cssH); // Tamaño mínimo
+            
             const dpr = Math.max(1, window.devicePixelRatio || 1);
 
             [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
@@ -510,36 +554,55 @@
             });
         }
 
-        // FIX: call this whenever design screen is shown or window resizes.
+        // Función mejorada para asegurar que el canvas esté listo
         function ensureCanvasReady() {
-            // We wait a frame to ensure layout completed if the screen was just shown
+            // Configurar tamaño inmediatamente
+            setCanvasSizeToContainer();
+            
+            // Esperar un frame para asegurar que el layout esté completo
             requestAnimationFrame(() => {
-                setCanvasSizeToContainer();
-                // redraw current frame & onion if any
-                if (frames[activeFrame]) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        ctx.drawImage(img, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                    };
-                    img.src = frames[activeFrame];
-                } else {
-                    ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                // Verificar si necesitamos reconfigurar el tamaño
+                if (!designScreen.classList.contains('hidden')) {
+                    const rect = canvasContainer.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        setCanvasSizeToContainer();
+                    }
                 }
-
-                if (onionSkinActive && frames[activeFrame - 1]) {
-                    const pimg = new Image();
-                    pimg.onload = () => {
-                        onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        onionSkinCtx.globalAlpha = 0.35;
-                        onionSkinCtx.drawImage(pimg, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        onionSkinCtx.globalAlpha = 1;
-                    };
-                    pimg.src = frames[activeFrame - 1];
-                } else {
-                    onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                }
+                
+                // Redibujar contenido
+                redrawCanvas();
             });
+        }
+
+        // Nueva función para redibujar el contenido del canvas
+        function redrawCanvas() {
+            const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+            const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+            
+            // Limpiar todos los canvas
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+            onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            selectionCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Redibujar frame actual si existe
+            if (frames[activeFrame]) {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                };
+                img.src = frames[activeFrame];
+            }
+
+            // Redibujar onion skin si está activo
+            if (onionSkinActive && frames[activeFrame - 1]) {
+                const pimg = new Image();
+                pimg.onload = () => {
+                    onionSkinCtx.globalAlpha = 0.35;
+                    onionSkinCtx.drawImage(pimg, 0, 0, canvasWidth, canvasHeight);
+                    onionSkinCtx.globalAlpha = 1;
+                };
+                pimg.src = frames[activeFrame - 1];
+            }
         }
 
         // -----------------------
@@ -552,8 +615,10 @@
         function showDesignScreen() {
             homeScreen.classList.add('hidden');
             designScreen.classList.remove('hidden');
-            // FIX: initialize/rescale canvas now that design screen is visible
-            ensureCanvasReady();
+            // Configurar canvas inmediatamente al mostrar la pantalla
+            setTimeout(() => {
+                ensureCanvasReady();
+            }, 50); // Pequeño delay para asegurar que el DOM se haya actualizado
         }
 
         function renderProjects() {
@@ -641,18 +706,18 @@
 
         // Canvas Drawing Logic
         function initCanvas() {
-            // FIX: No forzamos un canvasSize fijo. Usamos setCanvasSizeToContainer
+            // Asegurar que el canvas tenga el tamaño correcto
             setCanvasSizeToContainer();
 
-            // Estilos iniciales
-            ctx.setTransform(1,0,0,1,0,0); // reset
+            // Estilos iniciales para el contexto de dibujo
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = currentColor;
             ctx.lineWidth = currentSize;
 
-            onionSkinCtx.setTransform(1,0,0,1,0,0);
-            selectionCtx.setTransform(1,0,0,1,0,0);
+            // Reinicializar el historial con el estado actual
+            history = [canvas.toDataURL()];
+            historyIndex = 0;
         }
         
         // Función para redimensionar los lienzos
@@ -661,11 +726,29 @@
             setCanvasSizeToContainer();
         }
 
+        // Manejador de redimensionamiento con debounce
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            // Si el diseño está visible, reajustamos los canvas
-            if (!designScreen.classList.contains('hidden')) {
-                ensureCanvasReady();
-            }
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (!designScreen.classList.contains('hidden')) {
+                    ensureCanvasReady();
+                } else {
+                    // Incluso si está oculto, actualizar para futuras aperturas
+                    setCanvasSizeToContainer();
+                }
+            }, 100);
+        });
+
+        // Manejador para cambios de orientación en móviles
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => {
+                if (!designScreen.classList.contains('hidden')) {
+                    ensureCanvasReady();
+                } else {
+                    setCanvasSizeToContainer();
+                }
+            }, 200); // Delay más largo para orientationchange
         });
 
 
@@ -1213,10 +1296,17 @@
             const project = projects[index];
             frames = project.frames && project.frames.length ? project.frames.slice() : [''];
             activeFrame = 0;
+            
+            // Configurar canvas antes de mostrar la pantalla
+            setCanvasSizeToContainer();
             showDesignScreen();
-            initCanvas(); // FIX: inicializamos y dimensionamos aquí
-            loadFrame(activeFrame);
-            updateFramePreviews();
+            
+            // Inicializar canvas después de mostrar la pantalla
+            setTimeout(() => {
+                initCanvas();
+                loadFrame(activeFrame);
+                updateFramePreviews();
+            }, 100);
         }
 
         // Guardar proyecto en array
