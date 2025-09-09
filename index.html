@@ -863,10 +863,106 @@
             }
             
             ctx.putImageData(imageData, 0, 0);
-        }\n        \n        function getPixelColor(data, x, y, width) {\n            const index = (y * width + x) * 4;\n            return {\n                r: data[index],\n                g: data[index + 1],\n                b: data[index + 2],\n                a: data[index + 3]\n            };\n        }\n        \n        function setPixelColor(data, x, y, width, color) {\n            const index = (y * width + x) * 4;\n            data[index] = color.r;\n            data[index + 1] = color.g;\n            data[index + 2] = color.b;\n            data[index + 3] = 255; // Full opacity\n        }\n        \n        function hexToRgb(hex) {\n            const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);\n            return result ? {\n                r: parseInt(result[1], 16),\n                g: parseInt(result[2], 16),\n                b: parseInt(result[3], 16)\n            } : {r: 0, g: 0, b: 0};\n        }\n        \n        function colorsMatch(color1, color2, tolerance = 0) {\n            return Math.abs(color1.r - color2.r) <= tolerance &&\n                   Math.abs(color1.g - color2.g) <= tolerance &&\n                   Math.abs(color1.b - color2.b) <= tolerance;\n        }\n        \n        // =====================================================\n        // IMPROVED DRAWING FUNCTION\n        // =====================================================\n\n        function draw(e) {\n            if (!isDrawing && !isDrawingShape) return;\n            const rect = canvas.getBoundingClientRect();\n            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);\n            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);\n            if (clientX == null || clientY == null) return;\n            \n            const x = (clientX - rect.left) * (canvas.width / rect.width);\n            const y = (clientY - rect.top) * (canvas.height / rect.height);\n\n            if (currentTool === 'brush' && isDrawing) {\n                ctx.globalCompositeOperation = 'source-over';\n                ctx.beginPath();\n                ctx.moveTo(lastX, lastY);\n                ctx.lineTo(x, y);\n                ctx.stroke();\n            } else if (currentTool === 'eraser' && isDrawing) {\n                ctx.globalCompositeOperation = 'destination-out';\n                ctx.beginPath();\n                ctx.moveTo(lastX, lastY);\n                ctx.lineTo(x, y);\n                ctx.stroke();\n            } else if (currentTool === 'lasso' && isDrawing) {\n                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);\n                selectionCtx.strokeStyle = '#00f';\n                selectionCtx.setLineDash([5, 5]);\n                selectionCtx.lineWidth = 1;\n                selectionCtx.beginPath();\n                selectionCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);\n                lassoPoints.forEach(p => selectionCtx.lineTo(p.x, p.y));\n                selectionCtx.lineTo(x, y);\n                selectionCtx.stroke();\n                lassoPoints.push({x, y});\n            } else if ((currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') && isDrawingShape) {\n                // Preview shape while drawing\n                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);\n                selectionCtx.strokeStyle = currentColor;\n                selectionCtx.lineWidth = drawingTools.shapes.strokeWidth;\n                selectionCtx.setLineDash([5, 5]);\n                \n                if (currentTool === 'line') {\n                    selectionCtx.beginPath();\n                    selectionCtx.moveTo(shapeStartX, shapeStartY);\n                    selectionCtx.lineTo(x, y);\n                    selectionCtx.stroke();\n                } else if (currentTool === 'rectangle') {\n                    const width = x - shapeStartX;\n                    const height = y - shapeStartY;\n                    selectionCtx.strokeRect(shapeStartX, shapeStartY, width, height);\n                } else if (currentTool === 'circle') {\n                    const radius = Math.sqrt(Math.pow(x - shapeStartX, 2) + Math.pow(y - shapeStartY, 2));\n                    selectionCtx.beginPath();\n                    selectionCtx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);\n                    selectionCtx.stroke();\n                }\n            }\n            \n            [lastX, lastY] = [x, y];\n        }"}
+        }
+        
+        function getPixelColor(data, x, y, width) {
+            const index = (y * width + x) * 4;
+            return {
+                r: data[index],
+                g: data[index + 1],
+                b: data[index + 2],
+                a: data[index + 3]
+            };
+        }
+        
+        function setPixelColor(data, x, y, width, color) {
+            const index = (y * width + x) * 4;
+            data[index] = color.r;
+            data[index + 1] = color.g;
+            data[index + 2] = color.b;
+            data[index + 3] = 255; // Full opacity
+        }
+        
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : {r: 0, g: 0, b: 0};
+        }
+        
+        function colorsMatch(color1, color2, tolerance = 0) {
+            return Math.abs(color1.r - color2.r) <= tolerance &&
+                   Math.abs(color1.g - color2.g) <= tolerance &&
+                   Math.abs(color1.b - color2.b) <= tolerance;
+        }
+        
+        // =====================================================
+        // IMPROVED DRAWING FUNCTION
+        // =====================================================
+
+        function draw(e) {
+            if (!isDrawing && !isDrawingShape) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+            if (clientX == null || clientY == null) return;
+            
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+            if (currentTool === 'brush' && isDrawing) {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } else if (currentTool === 'eraser' && isDrawing) {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } else if (currentTool === 'lasso' && isDrawing) {
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                selectionCtx.strokeStyle = '#00f';
+                selectionCtx.setLineDash([5, 5]);
+                selectionCtx.lineWidth = 1;
+                selectionCtx.beginPath();
+                selectionCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => selectionCtx.lineTo(p.x, p.y));
+                selectionCtx.lineTo(x, y);
+                selectionCtx.stroke();
+                lassoPoints.push({x, y});
+            } else if ((currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') && isDrawingShape) {
+                // Preview shape while drawing
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                selectionCtx.strokeStyle = currentColor;
+                selectionCtx.lineWidth = drawingTools.shapes.strokeWidth;
+                selectionCtx.setLineDash([5, 5]);
+                
+                if (currentTool === 'line') {
+                    selectionCtx.beginPath();
+                    selectionCtx.moveTo(shapeStartX, shapeStartY);
+                    selectionCtx.lineTo(x, y);
+                    selectionCtx.stroke();
+                } else if (currentTool === 'rectangle') {
+                    const width = x - shapeStartX;
+                    const height = y - shapeStartY;
+                    selectionCtx.strokeRect(shapeStartX, shapeStartY, width, height);
+                } else if (currentTool === 'circle') {
+                    const radius = Math.sqrt(Math.pow(x - shapeStartX, 2) + Math.pow(y - shapeStartY, 2));
+                    selectionCtx.beginPath();
+                    selectionCtx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);
+                    selectionCtx.stroke();
+                }
+            }
+            
+            [lastX, lastY] = [x, y];
+        }"}
 
         function startDrawing(e) {
-            isDrawing = true;
             const rect = canvas.getBoundingClientRect();
             const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
             const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
@@ -875,21 +971,86 @@
             const y = (clientY - rect.top) * (canvas.height / rect.height);
             [lastX, lastY] = [x, y];
             
-            if (currentTool === 'lasso') {
+            if (currentTool === 'fill') {
+                // Flood fill tool
+                floodFill(Math.floor(x), Math.floor(y), currentColor);
+                saveToHistory();
+                saveFrame();
+                return;
+            } else if (currentTool === 'text') {
+                // Text tool - show input dialog
+                const text = prompt('Ingrese el texto:');
+                if (text) {
+                    ctx.font = `${drawingTools.text.size}px ${drawingTools.text.font}`;
+                    ctx.fillStyle = drawingTools.text.color;
+                    ctx.fillText(text, x, y);
+                    saveToHistory();
+                    saveFrame();
+                }
+                return;
+            } else if (currentTool === 'line' || currentTool === 'rectangle' || currentTool === 'circle') {
+                // Shape tools
+                isDrawingShape = true;
+                shapeStartX = x;
+                shapeStartY = y;
+                saveToHistory();
+                return;
+            } else if (currentTool === 'lasso') {
+                // Lasso tool
+                isDrawing = true;
                 lassoPoints = [{x, y}];
                 selectedImageData = null;
                 deleteSelectionBtn.classList.add('hidden');
+                return;
             } else {
-                if (historyIndex < history.length - 1) {
-                    history = history.slice(0, historyIndex + 1);
-                }
-                // Guardar el estado actual del lienzo para el historial
-                history.push(canvas.toDataURL());
-                historyIndex++;
+                // Brush and eraser tools
+                isDrawing = true;
+                saveToHistory();
             }
+        }
+        
+        function saveToHistory() {
+            if (historyIndex < history.length - 1) {
+                history = history.slice(0, historyIndex + 1);
+            }
+            history.push(canvas.toDataURL());
+            historyIndex++;
         }
 
         function stopDrawing() {
+            if (isDrawingShape) {
+                // Finalize shape drawing
+                const rect = canvas.getBoundingClientRect();
+                const x = lastX;
+                const y = lastY;
+                
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = drawingTools.shapes.strokeWidth;
+                ctx.setLineDash([]);
+                
+                if (currentTool === 'line') {
+                    ctx.beginPath();
+                    ctx.moveTo(shapeStartX, shapeStartY);
+                    ctx.lineTo(x, y);
+                    ctx.stroke();
+                } else if (currentTool === 'rectangle') {
+                    const width = x - shapeStartX;
+                    const height = y - shapeStartY;
+                    ctx.strokeRect(shapeStartX, shapeStartY, width, height);
+                } else if (currentTool === 'circle') {
+                    const radius = Math.sqrt(Math.pow(x - shapeStartX, 2) + Math.pow(y - shapeStartY, 2));
+                    ctx.beginPath();
+                    ctx.arc(shapeStartX, shapeStartY, radius, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+                
+                isDrawingShape = false;
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                saveFrame();
+                return;
+            }
+            
+            if (!isDrawing) return;
             isDrawing = false;
             
             if (currentTool === 'lasso' && lassoPoints.length > 2) {
@@ -944,7 +1105,7 @@
                 deleteSelectionBtn.classList.add('hidden');
             }
 
-            // Guardar el estado del frame actual (si hay proyecto abierto)
+            // Save current frame state
             saveFrame();
         }
 
