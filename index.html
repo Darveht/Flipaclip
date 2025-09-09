@@ -202,6 +202,59 @@
         .layer-item.swiped .layer-actions {
             right: 0;
         }
+
+        .frame-context-menu {
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+            min-width: 120px;
+            padding: 8px 0;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .frame-context-menu::before {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: white;
+        }
+
+        .frame-context-menu button {
+            width: 100%;
+            text-align: left;
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .frame-context-menu button:hover {
+            background-color: #f3f4f6;
+        }
+
+        .frame-context-menu button.delete:hover {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+
+        .frame-preview.dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+        }
+
+        .frame-preview.drag-over {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px #3b82f6;
+        }
     </style>
 </head>
 <body>
@@ -641,10 +694,11 @@
             projects.push({
                 name: newProjectName,
                 time: '00:00',
-                fps: '24 fps',
+                fps: '12 fps',
                 img: `https://placehold.co/200x200/cccccc/ffffff?text=${encodeURIComponent(newProjectName)}`,
                 frames: [''] // FIX: create empty frame array so editor opens with a blank frame
             });
+            saveToLocalStorage();
             renderProjects();
             newProjectModal.classList.add('hidden');
             // Abrir el nuevo proyecto
@@ -837,6 +891,7 @@
             // Guardar el estado del frame actual y actualizar miniatura
             saveFrame();
             updateFramePreviews();
+            saveToLocalStorage();
         }
 
         function handleLassoMove(e) {
@@ -1099,6 +1154,7 @@
             activeFrame++;
             loadFrame(activeFrame);
             updateFramePreviews();
+            saveToLocalStorage();
         }
 
         function updateFramePreviews() {
@@ -1137,13 +1193,98 @@
             frameEl.style.backgroundSize = 'contain';
             frameEl.style.backgroundPosition = 'center';
             frameEl.style.backgroundColor = '#fff';
+            frameEl.draggable = true;
+            frameEl.dataset.frameIndex = index;
             frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
-            frameEl.addEventListener('click', () => {
+            
+            // Click event for frame selection
+            frameEl.addEventListener('click', (e) => {
                 if (isPlaying) {
                     pauseAnimation();
                 }
                 loadFrame(index);
             });
+
+            // Context menu on long press/right click
+            let longPressTimer;
+            let isLongPress = false;
+
+            frameEl.addEventListener('mousedown', (e) => {
+                if (e.button === 2) { // Right click
+                    e.preventDefault();
+                    showFrameContextMenu(e, index);
+                    return;
+                }
+                longPressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    showFrameContextMenu(e, index);
+                }, 500);
+            });
+
+            frameEl.addEventListener('mouseup', () => {
+                clearTimeout(longPressTimer);
+                setTimeout(() => { isLongPress = false; }, 100);
+            });
+
+            frameEl.addEventListener('click', (e) => {
+                if (isLongPress) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+            });
+
+            frameEl.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    isLongPress = true;
+                    showFrameContextMenu(e.touches[0], index);
+                }, 500);
+            });
+
+            frameEl.addEventListener('touchend', () => {
+                clearTimeout(longPressTimer);
+                setTimeout(() => { isLongPress = false; }, 100);
+            });
+
+            // Drag and drop events
+            frameEl.addEventListener('dragstart', (e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', index);
+                frameEl.classList.add('dragging');
+            });
+
+            frameEl.addEventListener('dragend', () => {
+                frameEl.classList.remove('dragging');
+                document.querySelectorAll('.frame-preview').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            });
+
+            frameEl.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            });
+
+            frameEl.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                frameEl.classList.add('drag-over');
+            });
+
+            frameEl.addEventListener('dragleave', (e) => {
+                frameEl.classList.remove('drag-over');
+            });
+
+            frameEl.addEventListener('drop', (e) => {
+                e.preventDefault();
+                frameEl.classList.remove('drag-over');
+                const draggedIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                const targetIndex = index;
+                
+                if (draggedIndex !== targetIndex) {
+                    reorderFrames(draggedIndex, targetIndex);
+                }
+            });
+
             framesContainer.appendChild(frameEl);
         }
         
@@ -1298,16 +1439,149 @@
             }, 100);
         }
 
+        // Context menu functionality
+        function showFrameContextMenu(event, frameIndex) {
+            // Remove any existing context menu
+            const existingMenu = document.querySelector('.frame-context-menu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+
+            const menu = document.createElement('div');
+            menu.className = 'frame-context-menu';
+            menu.innerHTML = `
+                <button onclick="duplicateFrame(${frameIndex})">
+                    <i class="fas fa-copy mr-2"></i>Duplicar
+                </button>
+                <button onclick="deleteFrame(${frameIndex})" class="delete" ${frames.length <= 1 ? 'disabled' : ''}>
+                    <i class="fas fa-trash mr-2"></i>Eliminar
+                </button>
+            `;
+
+            const frameEl = document.querySelector(`[data-frame-index="${frameIndex}"]`);
+            if (frameEl) {
+                frameEl.appendChild(menu);
+                
+                // Close menu when clicking elsewhere
+                setTimeout(() => {
+                    document.addEventListener('click', function closeMenu(e) {
+                        if (!menu.contains(e.target)) {
+                            menu.remove();
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    });
+                }, 100);
+            }
+        }
+
+        function duplicateFrame(frameIndex) {
+            if (isPlaying) {
+                pauseAnimation();
+            }
+            
+            saveFrame(); // Save current frame
+            const frameData = frames[frameIndex] || '';
+            frames.splice(frameIndex + 1, 0, frameData);
+            
+            // Update active frame if needed
+            if (frameIndex <= activeFrame) {
+                activeFrame++;
+            }
+            
+            updateFramePreviews();
+            saveToLocalStorage();
+            
+            // Remove context menu
+            const menu = document.querySelector('.frame-context-menu');
+            if (menu) menu.remove();
+        }
+
+        function deleteFrame(frameIndex) {
+            if (frames.length <= 1) return; // Don't delete if it's the only frame
+            
+            if (isPlaying) {
+                pauseAnimation();
+            }
+            
+            frames.splice(frameIndex, 1);
+            
+            // Adjust active frame
+            if (frameIndex <= activeFrame) {
+                activeFrame = Math.max(0, activeFrame - 1);
+            }
+            if (activeFrame >= frames.length) {
+                activeFrame = frames.length - 1;
+            }
+            
+            loadFrame(activeFrame);
+            updateFramePreviews();
+            saveToLocalStorage();
+            
+            // Remove context menu
+            const menu = document.querySelector('.frame-context-menu');
+            if (menu) menu.remove();
+        }
+
+        function reorderFrames(fromIndex, toIndex) {
+            if (fromIndex === toIndex) return;
+            
+            if (isPlaying) {
+                pauseAnimation();
+            }
+            
+            const draggedFrame = frames.splice(fromIndex, 1)[0];
+            frames.splice(toIndex, 0, draggedFrame);
+            
+            // Update active frame index
+            if (fromIndex === activeFrame) {
+                activeFrame = toIndex;
+            } else if (fromIndex < activeFrame && toIndex >= activeFrame) {
+                activeFrame--;
+            } else if (fromIndex > activeFrame && toIndex <= activeFrame) {
+                activeFrame++;
+            }
+            
+            updateFramePreviews();
+            saveToLocalStorage();
+        }
+
+        // LocalStorage functionality
+        function saveToLocalStorage() {
+            saveCurrentProject();
+            localStorage.setItem('flipaclip_projects', JSON.stringify(projects));
+        }
+
+        function loadFromLocalStorage() {
+            const savedProjects = localStorage.getItem('flipaclip_projects');
+            if (savedProjects) {
+                try {
+                    projects = JSON.parse(savedProjects);
+                } catch (e) {
+                    console.error('Error loading projects from localStorage:', e);
+                }
+            }
+        }
+
         // Guardar proyecto en array
         function saveCurrentProject() {
             if (currentProjectIndex === null) return;
             projects[currentProjectIndex].frames = frames.slice();
-            // Si quieres persistir, puedes usar localStorage aquí:
-            // localStorage.setItem('mi_proyectos', JSON.stringify(projects));
+            
+            // Update project thumbnail with first frame
+            if (frames.length > 0 && frames[0]) {
+                projects[currentProjectIndex].img = frames[0];
+            }
+            
+            // Update time based on frame count and fps
+            const totalSeconds = Math.ceil(frames.length / fps);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            projects[currentProjectIndex].time = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
         // Initial rendering
         window.onload = () => {
+            loadFromLocalStorage();
             renderProjects();
             setActiveTab(proyectosTab);
             // NOTA: no llamar resizeCanvas() aquí porque el designScreen suele estar oculto;
