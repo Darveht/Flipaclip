@@ -62,55 +62,38 @@
         }
 
         .canvas-container {
-            flex-grow: 1;
             position: relative;
             background-color: white;
             border-radius: 0.5rem;
             box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
-            margin: 1rem;
+            margin: 1rem auto;
             display: flex;
             justify-content: center;
             align-items: center;
-            /* FIX: usar aspect-ratio y overflow hidden para que el contenedor tenga tamaño incluso cuando la pantalla está oculta */
+            width: calc(100% - 2rem);
+            max-width: 800px;
             aspect-ratio: 16 / 9;
-            width: 100%;
-            max-width: 960px;
         }
 
-        #drawingCanvas {
+        #drawingCanvas, #onionSkinCanvas, #selectionCanvas {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 2px solid #333;
+            background-color: white;
             touch-action: none;
-            background-color: transparent;
-            border: 1px solid black;
-            /* FIX: ocupar todo el contenedor sin usar translate que desalineaba */
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
         }
 
-        /* --- FIX --- Eliminado transform: translate(-50%, -50%) que causaba 0px y desalineación.
-                   Ahora se posicionan con inset:0 y width/height 100% para que getBoundingClientRect funcione bien. */
         #onionSkinCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
             opacity: 0.35;
             pointer-events: none;
+            border: none;
         }
         
         #selectionCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            width: 100%;
-            height: 100%;
             pointer-events: none;
+            border: none;
         }
 
         .frame-preview {
@@ -490,67 +473,37 @@
 
         // Función mejorada para configurar el tamaño del canvas
         function setCanvasSizeToContainer() {
-            // Si la pantalla de diseño está oculta, usar dimensiones por defecto
-            let cssW, cssH;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
             
-            if (designScreen.classList.contains('hidden')) {
-                // Usar dimensiones basadas en viewport cuando está oculto
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                
-                // Calcular tamaño del contenedor considerando padding y barras
-                const containerMaxWidth = Math.min(960, viewportWidth * 0.9);
-                const containerMaxHeight = (viewportHeight - 220) * 0.8; // 220px para barras superior e inferior
-                
-                // Mantener aspect ratio 16:9
-                const aspectRatio = 16 / 9;
-                if (containerMaxWidth / aspectRatio <= containerMaxHeight) {
-                    cssW = containerMaxWidth;
-                    cssH = containerMaxWidth / aspectRatio;
-                } else {
-                    cssH = containerMaxHeight;
-                    cssW = containerMaxHeight * aspectRatio;
-                }
+            // Calcular dimensiones disponibles
+            const availableWidth = viewportWidth - 32; // margen lateral
+            const availableHeight = viewportHeight - 240; // espacio para barras superior e inferior
+            
+            // Mantener aspect ratio 16:9
+            const aspectRatio = 16 / 9;
+            let canvasWidth, canvasHeight;
+            
+            if (availableWidth / aspectRatio <= availableHeight) {
+                canvasWidth = Math.min(availableWidth, 800);
+                canvasHeight = canvasWidth / aspectRatio;
             } else {
-                // Usar dimensiones reales del contenedor cuando está visible
-                const rect = canvasContainer.getBoundingClientRect();
-                cssW = rect.width;
-                cssH = rect.height;
-                
-                // Fallback si aún no tiene dimensiones
-                if (cssW === 0 || cssH === 0) {
-                    const viewportWidth = window.innerWidth;
-                    const viewportHeight = window.innerHeight;
-                    const containerMaxWidth = Math.min(960, viewportWidth * 0.9);
-                    const containerMaxHeight = (viewportHeight - 220) * 0.8;
-                    const aspectRatio = 16 / 9;
-                    
-                    if (containerMaxWidth / aspectRatio <= containerMaxHeight) {
-                        cssW = containerMaxWidth;
-                        cssH = containerMaxWidth / aspectRatio;
-                    } else {
-                        cssH = containerMaxHeight;
-                        cssW = containerMaxHeight * aspectRatio;
-                    }
-                }
+                canvasHeight = Math.min(availableHeight, 450);
+                canvasWidth = canvasHeight * aspectRatio;
             }
-
-            cssW = Math.max(320, cssW); // Tamaño mínimo
-            cssH = Math.max(180, cssH); // Tamaño mínimo
             
-            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            // Asegurar tamaños mínimos
+            canvasWidth = Math.max(320, canvasWidth);
+            canvasHeight = Math.max(180, canvasHeight);
 
             [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
-                // set CSS dimensions
-                c.style.width = cssW + 'px';
-                c.style.height = cssH + 'px';
-                // set backing store pixel dimensions
-                c.width = Math.floor(cssW * dpr);
-                c.height = Math.floor(cssH * dpr);
-                // reset transform and scale so drawing uses CSS pixels coordinates consistently
+                c.style.width = canvasWidth + 'px';
+                c.style.height = canvasHeight + 'px';
+                c.width = canvasWidth;
+                c.height = canvasHeight;
+                
                 const cctx = c.getContext('2d');
-                cctx.setTransform(1, 0, 0, 1, 0, 0); // reset any existing transform
-                cctx.scale(dpr, dpr); // afterwards all drawing coordinates are in CSS px
+                cctx.setTransform(1, 0, 0, 1, 0, 0);
             });
         }
 
@@ -752,15 +705,24 @@
         });
 
 
-        function draw(e) {
-            if (!isDrawing) return;
+        function getCanvasCoordinates(e) {
             const rect = canvas.getBoundingClientRect();
             const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
             const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
-            if (clientX == null || clientY == null) return;
+            if (clientX == null || clientY == null) return null;
             
-            const x = (clientX - rect.left) * (canvas.width / rect.width);
-            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const coords = getCanvasCoordinates(e);
+            if (!coords) return;
+            
+            const {x, y} = coords;
 
             if (currentTool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
@@ -793,12 +755,10 @@
 
         function startDrawing(e) {
             isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
-            if (clientX == null || clientY == null) return;
-            const x = (clientX - rect.left) * (canvas.width / rect.width);
-            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            const coords = getCanvasCoordinates(e);
+            if (!coords) return;
+            
+            const {x, y} = coords;
             [lastX, lastY] = [x, y];
             
             if (currentTool === 'lasso') {
@@ -875,14 +835,10 @@
         }
 
         function handleLassoMove(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
-            if (clientX == null || clientY == null) return;
+            const coords = getCanvasCoordinates(e);
+            if (!coords) return;
             
-            const x = (clientX - rect.left) * (canvas.width / rect.width);
-            const y = (clientY - rect.top) * (canvas.height / rect.height);
-            
+            const {x, y} = coords;
             const dx = x - selectionStartOffset.x;
             const dy = y - selectionStartOffset.y;
 
@@ -924,9 +880,11 @@
         canvas.addEventListener('mousedown', (e) => {
             if (currentTool === 'lasso' && selectedImageData) {
                 isMoving = true;
-                const rect = canvas.getBoundingClientRect();
-                selectionStartOffset.x = (e.clientX - rect.left) * (canvas.width / rect.width);
-                selectionStartOffset.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+                const coords = getCanvasCoordinates(e);
+                if (coords) {
+                    selectionStartOffset.x = coords.x;
+                    selectionStartOffset.y = coords.y;
+                }
             } else {
                 startDrawing(e);
             }
@@ -952,9 +910,11 @@
             e.preventDefault();
             if (currentTool === 'lasso' && selectedImageData) {
                 isMoving = true;
-                const rect = canvas.getBoundingClientRect();
-                selectionStartOffset.x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
-                selectionStartOffset.y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+                const coords = getCanvasCoordinates(e);
+                if (coords) {
+                    selectionStartOffset.x = coords.x;
+                    selectionStartOffset.y = coords.y;
+                }
             } else {
                 startDrawing(e);
             }
