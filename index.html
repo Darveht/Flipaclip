@@ -488,12 +488,20 @@
         // --- FIX FUNCTIONS ---
         // -----------------------
 
-        // FIX: Set canvas CSS size + backing store size using devicePixelRatio,
-        // and reset transforms so coordinates calculations work correctly.
-        function setCanvasSizeToContainer() {
+        // MEJORA: Función mejorada para manejar el tamaño del canvas
+        function updateCanvasSize() {
             const rect = canvasContainer.getBoundingClientRect();
-            const cssW = Math.max(1, rect.width);
-            const cssH = Math.max(1, rect.height);
+            let cssW = rect.width;
+            let cssH = rect.height;
+            
+            // FIX: Si el contenedor está oculto o tiene tamaño 0, usar valores por defecto
+            if (cssW === 0 || cssH === 0) {
+                // Calcular tamaño basado en el aspect-ratio del contenedor
+                const maxWidth = Math.min(window.innerWidth - 40, 960); // máximo 960px como en CSS
+                cssW = maxWidth;
+                cssH = maxWidth * (9/16); // aspect-ratio 16:9 como en CSS
+            }
+            
             const dpr = Math.max(1, window.devicePixelRatio || 1);
 
             [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
@@ -508,37 +516,45 @@
                 cctx.setTransform(1, 0, 0, 1, 0, 0); // reset any existing transform
                 cctx.scale(dpr, dpr); // afterwards all drawing coordinates are in CSS px
             });
+            
+            console.log(`Canvas redimensionado: ${cssW}x${cssH} (DPR: ${dpr})`);
         }
 
-        // FIX: call this whenever design screen is shown or window resizes.
+        // MEJORA: Función mejorada para preparar el canvas cuando se abre la pantalla de diseño
         function ensureCanvasReady() {
-            // We wait a frame to ensure layout completed if the screen was just shown
+            // Esperamos varios frames para asegurar que el layout esté completamente renderizado
             requestAnimationFrame(() => {
-                setCanvasSizeToContainer();
-                // redraw current frame & onion if any
-                if (frames[activeFrame]) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        ctx.drawImage(img, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                    };
-                    img.src = frames[activeFrame];
-                } else {
-                    ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                }
+                requestAnimationFrame(() => {
+                    updateCanvasSize();
+                    
+                    // Redibujar frame actual y onion skin si existen
+                    const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+                    const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+                    
+                    if (frames[activeFrame]) {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                            ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                        };
+                        img.src = frames[activeFrame];
+                    } else {
+                        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                    }
 
-                if (onionSkinActive && frames[activeFrame - 1]) {
-                    const pimg = new Image();
-                    pimg.onload = () => {
-                        onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        onionSkinCtx.globalAlpha = 0.35;
-                        onionSkinCtx.drawImage(pimg, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                        onionSkinCtx.globalAlpha = 1;
-                    };
-                    pimg.src = frames[activeFrame - 1];
-                } else {
-                    onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
-                }
+                    if (onionSkinActive && frames[activeFrame - 1]) {
+                        const pimg = new Image();
+                        pimg.onload = () => {
+                            onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+                            onionSkinCtx.globalAlpha = 0.35;
+                            onionSkinCtx.drawImage(pimg, 0, 0, canvasWidth, canvasHeight);
+                            onionSkinCtx.globalAlpha = 1;
+                        };
+                        pimg.src = frames[activeFrame - 1];
+                    } else {
+                        onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+                    }
+                });
             });
         }
 
@@ -641,8 +657,8 @@
 
         // Canvas Drawing Logic
         function initCanvas() {
-            // FIX: No forzamos un canvasSize fijo. Usamos setCanvasSizeToContainer
-            setCanvasSizeToContainer();
+            // FIX: No forzamos un canvasSize fijo. Usamos updateCanvasSize
+            updateCanvasSize();
 
             // Estilos iniciales
             ctx.setTransform(1,0,0,1,0,0); // reset
@@ -657,8 +673,8 @@
         
         // Función para redimensionar los lienzos
         function resizeCanvas() {
-            // FIX: redirige a setCanvasSizeToContainer para mantener consistencia
-            setCanvasSizeToContainer();
+            // FIX: redirige a updateCanvasSize para mantener consistencia
+            updateCanvasSize();
         }
 
         window.addEventListener('resize', () => {
