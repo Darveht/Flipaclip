@@ -830,8 +830,9 @@
                 deleteSelectionBtn.classList.add('hidden');
             }
 
-            // Guardar el estado del frame actual (si hay proyecto abierto)
+            // Guardar el estado del frame actual y actualizar miniatura
             saveFrame();
+            updateFramePreviews();
         }
 
         function handleLassoMove(e) {
@@ -873,6 +874,7 @@
             isMoving = false;
             // Guardar el estado final del movimiento
             saveFrame();
+            updateFramePreviews();
             history.push(canvas.toDataURL());
             historyIndex++;
         }
@@ -976,6 +978,7 @@
                     ctx.fill();
                     ctx.globalCompositeOperation = 'source-over';
                     saveFrame();
+                    updateFramePreviews();
                     history.push(canvas.toDataURL());
                     historyIndex++;
                 };
@@ -1012,6 +1015,7 @@
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
                     saveFrame();
+                    updateFramePreviews();
                 };
                 tempImage.src = history[historyIndex];
             }
@@ -1025,6 +1029,7 @@
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
                     saveFrame();
+                    updateFramePreviews();
                 };
                 tempImage.src = history[historyIndex];
             }
@@ -1094,28 +1099,49 @@
         }
 
         function updateFramePreviews() {
-            framesContainer.innerHTML = '';
-            frames.forEach((frameData, index) => {
-                const frameEl = document.createElement('div');
-                frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
-                frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
-                frameEl.style.backgroundSize = 'contain';
-                frameEl.style.backgroundPosition = 'center';
-                frameEl.style.backgroundColor = '#fff';
-                frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
-                frameEl.addEventListener('click', () => {
-                    if (isPlaying) {
-                        pauseAnimation();
-                    }
-                    loadFrame(index);
+            const existingFrames = framesContainer.querySelectorAll('.frame-preview');
+            
+            // Si la cantidad de frames cambió, recrear todo
+            if (existingFrames.length !== frames.length) {
+                framesContainer.innerHTML = '';
+                frames.forEach((frameData, index) => {
+                    createFramePreview(index, frameData);
                 });
-                framesContainer.appendChild(frameEl);
-            });
+            } else {
+                // Solo actualizar las miniaturas que necesiten actualización
+                frames.forEach((frameData, index) => {
+                    const frameEl = existingFrames[index];
+                    if (frameEl) {
+                        // Actualizar imagen de fondo
+                        frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
+                        // Actualizar clase activa
+                        frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
+                    }
+                });
+            }
+            
             // Desplazar la línea de tiempo para mostrar el fotograma activo
             const activeFrameEl = framesContainer.querySelector('.frame-preview.active');
             if (activeFrameEl) {
                 framesContainer.scrollLeft = activeFrameEl.offsetLeft - (framesContainer.offsetWidth / 2) + (activeFrameEl.offsetWidth / 2);
             }
+        }
+
+        function createFramePreview(index, frameData) {
+            const frameEl = document.createElement('div');
+            frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
+            frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
+            frameEl.style.backgroundSize = 'contain';
+            frameEl.style.backgroundPosition = 'center';
+            frameEl.style.backgroundColor = '#fff';
+            frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
+            frameEl.addEventListener('click', () => {
+                if (isPlaying) {
+                    pauseAnimation();
+                }
+                loadFrame(index);
+            });
+            framesContainer.appendChild(frameEl);
         }
         
         addFrameBtn.addEventListener('click', () => {
