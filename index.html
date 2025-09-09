@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlipaClip</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: none;
+            overflow: hidden;
+            background-color: #f3f4f6;
+        }
+
+        .tab-indicator {
+            transition: all 0.3s ease;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .modal {
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 1rem;
+            width: 90%;
+            max-width: 500px;
+        }
+
+        .tool-button {
+            background-color: #f3f4f6;
+            border-radius: 9999px;
+            padding: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .tool-button.active {
+            background-color: #ef4444;
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.5), 0 4px 6px -2px rgba(239, 68, 68, 0.5);
+            transform: scale(1.1);
+        }
+
+        .canvas-container {
+            flex-grow: 1;
+            position: relative;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+            margin: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* FIX: usar aspect-ratio y overflow hidden para que el contenedor tenga tamaño incluso cuando la pantalla está oculta */
+            aspect-ratio: 16 / 9;
+            width: 100%;
+            max-width: 960px;
+        }
+
+        #drawingCanvas {
+            touch-action: none;
+            background-color: transparent;
+            border: 1px solid black;
+            /* FIX: ocupar todo el contenedor sin usar translate que desalineaba */
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- FIX --- Eliminado transform: translate(-50%, -50%) que causaba 0px y desalineación.
+                   Ahora se posicionan con inset:0 y width/height 100% para que getBoundingClientRect funcione bien. */
+        #onionSkinCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        
+        #selectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .frame-preview {
+            width: 4rem;
+            height: 4rem;
+            border: 2px solid black;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .frame-preview.active {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 2px #ef4444;
+        }
+
+        .frame-preview .frame-number {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background-color: #ef4444;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 0.125rem 0.375rem;
+            border-radius: 9999px;
+        }
+
+        .controls-bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #fff;
+            box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+            border-top-left-radius: 1.5rem;
+            border-top-right-radius: 1.5rem;
+            padding: 1rem;
+        }
+
+        .timeline-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+        
+        .layer-panel {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            max-height: 50%;
+            background-color: white;
+            border-top-left-radius: 1.5rem;
+            border-top-right-radius: 1.5rem;
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.2);
+            z-index: 60;
+            transition: bottom 0.3s ease-in-out;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .layer-panel.active {
+            bottom: 0;
+        }
+
+        .layer-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            cursor: grab;
+            transition: transform 0.2s, background-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer-item .drag-handle {
+            cursor: grab;
+        }
+
+        .layer-item .layer-actions {
+            display: flex;
+            align-items: center;
+            background-color: #ef4444;
+            color: white;
+            position: absolute;
+            right: -100%;
+            top: 0;
+            bottom: 0;
+            padding: 0 1rem;
+            transition: right 0.2s ease-in-out;
+        }
+
+        .layer-item.swiped .layer-actions {
+            right: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Modal para crear nuevo proyecto -->
+    <div id="newProjectModal" class="fixed inset-0 hidden modal">
+        <div class="modal-content text-center">
+            <h2 class="text-2xl font-bold mb-4">¡Nuevo proyecto!</h2>
+            <p class="text-gray-600 mb-6">¿Quieres crear un nuevo proyecto de animación?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="cancelButton" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-full font-semibold">Cancelar</button>
+                <button id="createButton" class="px-6 py-2 bg-red-500 text-white rounded-full font-semibold">Crear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de inicio -->
+    <div id="homeScreen" class="w-full h-full flex flex-col">
+        <!-- Navbar Superior -->
+        <div class="fixed top-0 left-0 w-full bg-white shadow-md z-50 rounded-b-xl">
+            <div class="flex items-center justify-between p-4">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-bars text-xl text-gray-600 cursor-pointer"></i>
+                </div>
+                <div class="flex-grow flex justify-center">
+                    <span class="text-2xl font-bold text-gray-800 tracking-wider">FlipaClip</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-search text-xl text-gray-600 cursor-pointer"></i>
+                    <i class="fas fa-ellipsis-v text-xl text-gray-600 cursor-pointer"></i>
+                </div>
+            </div>
+            <!-- Pestañas -->
+            <div class="flex justify-around text-gray-600 font-semibold text-lg border-b border-gray-200">
+                <div id="proyectosTab" class="flex-1 text-center py-3 cursor-pointer relative">
+                    Proyectos
+                    <div class="tab-indicator absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-1 bg-red-500 rounded-t"></div>
+                </div>
+                <div id="peliculasTab" class="flex-1 text-center py-3 cursor-pointer relative">
+                    Películas
+                    <div class="tab-indicator absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-1 bg-red-500 rounded-t"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenido de la página -->
+        <main class="flex-grow p-4 mt-36 w-full max-w-2xl overflow-y-auto pb-24">
+            <div id="proyectosContent" class="grid grid-cols-2 gap-4">
+                <!-- Proyectos se renderizarán aquí -->
+            </div>
+            <div id="peliculasContent" class="grid grid-cols-2 gap-4 hidden">
+                <!-- Contenido de Películas -->
+                <p class="col-span-2 text-center text-gray-500 mt-10">¡Aún no tienes películas! Crea un proyecto primero.</p>
+            </div>
+        </main>
+
+        <!-- Barra de navegación inferior -->
+        <div class="fixed bottom-0 left-0 w-full bg-white shadow-lg rounded-t-2xl z-50">
+            <div class="flex justify-around items-center h-16">
+                <div class="flex flex-col items-center text-red-500 cursor-pointer">
+                    <i class="fas fa-home text-xl"></i>
+                    <span class="text-xs mt-1">INICIO</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-rocket text-xl"></i>
+                    <span class="text-xs mt-1">DESCUBRE</span>
+                </div>
+                <div class="relative -top-6">
+                    <button id="addProjectBtn" class="bg-red-500 text-white p-4 rounded-full shadow-lg transition transform active:scale-95">
+                        <i class="fas fa-plus text-2xl"></i>
+                    </button>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-film text-xl"></i>
+                    <span class="text-xs mt-1">MIRAR</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-search text-xl"></i>
+                    <span class="text-xs mt-1">BUSCAR</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de diseño de FlipaClip -->
+    <div id="designScreen" class="hidden w-full h-full flex flex-col items-center">
+        <!-- Navbar Superior de diseño -->
+        <div class="fixed top-0 left-0 w-full bg-white shadow-md z-50 rounded-b-xl">
+            <div class="flex justify-between items-center p-4">
+                <i id="closeBtn" class="fas fa-times text-2xl text-gray-600 cursor-pointer"></i>
+                <div class="flex-grow text-center text-gray-500 font-semibold">OCULTAR</div>
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-expand text-gray-600 cursor-pointer"></i>
+                    <button id="deleteSelectionBtn" class="hidden tool-button bg-red-500 text-white rounded-full p-2"><i class="fas fa-trash-alt"></i></button>
+                    <i class="fas fa-upload text-gray-600 cursor-pointer"></i>
+                    <i class="fas fa-ellipsis-v text-gray-600 cursor-pointer"></i>
+                </div>
+            </div>
+            <!-- Barra de herramientas -->
+            <div class="flex justify-around p-4 relative">
+                <div id="brushTool" class="relative">
+                    <button class="tool-button active"><i class="fas fa-paint-brush text-xl"></i></button>
+                    <div id="brushOptions" class="hidden absolute top-1/2 left-full transform -translate-y-1/2 ml-4">
+                        <div class="flex items-center space-x-2 p-2 bg-white rounded-lg shadow-lg">
+                            <input type="color" id="colorPicker" value="#000000" class="w-8 h-8 rounded-full border-none cursor-pointer">
+                            <input type="range" id="brushSize" min="1" max="50" value="5" class="w-24">
+                        </div>
+                    </div>
+                </div>
+                <button id="eraserTool" class="tool-button"><i class="fas fa-eraser text-xl"></i></button>
+                <button id="lassoTool" class="tool-button"><i class="fas fa-draw-polygon text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-comment-dots text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-clone text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-font text-xl"></i></button>
+                <button class="tool-button"><i class="fas fa-ellipsis-h text-xl"></i></button>
+            </div>
+        </div>
+
+        <!-- Área de dibujo y animación -->
+        <div class="flex-grow flex justify-center items-center" style="width:100%; padding-top:100px; padding-bottom:120px;">
+            <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
+                <canvas id="onionSkinCanvas"></canvas>
+                <canvas id="drawingCanvas"></canvas>
+                <canvas id="selectionCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Controles inferiores de diseño -->
+        <div class="controls-bottom-bar flex flex-col">
+            <div class="flex items-center justify-center space-x-4 mb-4">
+                <button id="playBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-semibold"><i class="fas fa-play"></i> Reproducir</button>
+                <button id="onionSkinBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full"><i class="fas fa-layer-group"></i></button>
+                <button id="addFrameBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full"><i class="fas fa-plus"></i></button>
+            </div>
+            <div class="timeline-container w-full overflow-x-auto pb-2">
+                <div id="framesContainer" class="flex items-center space-x-2">
+                    <!-- Fotogramas se renderizarán aquí -->
+                </div>
+            </div>
+            <div class="flex justify-around items-center py-4 border-t border-gray-200">
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-music text-xl"></i>
+                    <span class="text-xs mt-1">AUDIO</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="undoBtn">
+                    <i class="fas fa-undo text-xl"></i>
+                    <span class="text-xs mt-1">DESHACER</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="redoBtn">
+                    <i class="fas fa-redo text-xl"></i>
+                    <span class="text-xs mt-1">REHACER</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-copy text-xl"></i>
+                    <span class="text-xs mt-1">COPIAR</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
+                    <i class="fas fa-paste text-xl"></i>
+                    <span class="text-xs mt-1">PEGAR</span>
+                </div>
+                <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="layerBtn">
+                    <i class="fas fa-layer-group text-xl"></i>
+                    <span class="text-xs mt-1">CAPA</span>
+                </div>
+            </div>
+        </div>
+        <!-- Panel de capas -->
+        <div id="layerPanel" class="layer-panel">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg">Capas</h3>
+                <button id="closeLayerPanelBtn" class="p-2 bg-gray-200 rounded-full"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="layersList" class="flex flex-col-reverse">
+                <!-- Capas se renderizarán aquí -->
+            </div>
+            <div class="flex justify-center mt-4 space-x-4">
+                <button id="addLayerBtn" class="bg-red-500 text-white p-3 rounded-full font-semibold"><i class="fas fa-plus mr-2"></i>Añadir Capa</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // -------------------------------------------------------
+        // Hechos desde tu código original; aquí aplico fixes
+        // - FIX 1: canvas CSS y posición para que el rect tenga tamaño
+        // - FIX 2: inicializar tamaños de canvas con devicePixelRatio
+        // - FIX 3: inicializar el lienzo al mostrar la pantalla de diseño
+        // - FIX 4: manejar frames vacíos sin intentar dibujar imagen vacía
+        // - FIX 5: permitir abrir proyecto al tocar la tarjeta (event listener)
+        // -------------------------------------------------------
+
+        // DOM Elements
+        const homeScreen = document.getElementById('homeScreen');
+        const designScreen = document.getElementById('designScreen');
+        const addProjectBtn = document.getElementById('addProjectBtn');
+        const newProjectModal = document.getElementById('newProjectModal');
+        const cancelButton = document.getElementById('cancelButton');
+        const createButton = document.getElementById('createButton');
+        const closeBtn = document.getElementById('closeBtn');
+        const proyectosContent = document.getElementById('proyectosContent');
+        const peliculasContent = document.getElementById('peliculasContent');
+        const proyectosTab = document.getElementById('proyectosTab');
+        const peliculasTab = document.getElementById('peliculasTab');
+
+        // Drawing and Animation Elements
+        const canvasWrapper = document.getElementById('canvasWrapper') || document.querySelector('.canvas-container');
+        const canvasContainer = canvasWrapper; // alias
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const onionSkinCanvas = document.getElementById('onionSkinCanvas');
+        const onionSkinCtx = onionSkinCanvas.getContext('2d');
+        const selectionCanvas = document.getElementById('selectionCanvas');
+        const selectionCtx = selectionCanvas.getContext('2d');
+        const brushToolBtn = document.getElementById('brushTool').querySelector('button');
+        const eraserToolBtn = document.getElementById('eraserTool');
+        const lassoToolBtn = document.getElementById('lassoTool');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSize = document.getElementById('brushSize');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const framesContainer = document.getElementById('framesContainer');
+        const addFrameBtn = document.getElementById('addFrameBtn');
+        const playBtn = document.getElementById('playBtn');
+        const onionSkinBtn = document.getElementById('onionSkinBtn');
+        const toolButtons = document.querySelectorAll('.tool-button');
+        const deleteSelectionBtn = document.getElementById('deleteSelectionBtn');
+        const layerBtn = document.getElementById('layerBtn');
+        const layerPanel = document.getElementById('layerPanel');
+        const layersList = document.getElementById('layersList');
+        const closeLayerPanelBtn = document.getElementById('closeLayerPanelBtn');
+        const addLayerBtn = document.getElementById('addLayerBtn');
+        const playIcon = '<i class="fas fa-play"></i> Reproducir';
+        const pauseIcon = '<i class="fas fa-pause"></i> Pausar';
+
+        // State variables
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let history = [];
+        let historyIndex = -1;
+        let frames = [];
+        let activeFrame = 0;
+        let animationInterval;
+        let isPlaying = false;
+        let onionSkinActive = true;
+        let lassoPoints = [];
+        let isMoving = false;
+        let selectedImageData = null;
+        let selectionStartOffset = {x: 0, y: 0};
+        let fps = 12; // Nuevo estado para FPS
+
+        // Layers state
+        let layers = [];
+        let activeLayer = 0;
+
+        // Configuration
+        let currentColor = '#000000';
+        let currentSize = 5;
+        let currentTool = 'brush';
+
+        // Projects (tu array original mantenido)
+        let projects = [
+            { name: 'animación', time: '00:04', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=animacion', frames: [] },
+            { name: 'kioshi', time: '00:08', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=kioshi', frames: [] },
+            { name: 'abejazz a', time: '00:04', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=abejazz', frames: [] },
+            { name: 'avatar bocetos', time: '00:07', fps: '14 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=avatar+bocetos', frames: [] },
+            { name: 'ejemplo', time: '00:00', fps: '16 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=ejemplo', frames: [] },
+            { name: 'app', time: '00:12', fps: '12 fps', img: 'https://placehold.co/200x200/cccccc/ffffff?text=app', frames: [] },
+        ];
+        let currentProjectIndex = null;
+
+        // -----------------------
+        // --- FIX FUNCTIONS ---
+        // -----------------------
+
+        // FIX: Set canvas CSS size + backing store size using devicePixelRatio,
+        // and reset transforms so coordinates calculations work correctly.
+        function setCanvasSizeToContainer() {
+            const rect = canvasContainer.getBoundingClientRect();
+            const cssW = Math.max(1, rect.width);
+            const cssH = Math.max(1, rect.height);
+            const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+            [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
+                // set CSS dimensions
+                c.style.width = cssW + 'px';
+                c.style.height = cssH + 'px';
+                // set backing store pixel dimensions
+                c.width = Math.floor(cssW * dpr);
+                c.height = Math.floor(cssH * dpr);
+                // reset transform and scale so drawing uses CSS pixels coordinates consistently
+                const cctx = c.getContext('2d');
+                cctx.setTransform(1, 0, 0, 1, 0, 0); // reset any existing transform
+                cctx.scale(dpr, dpr); // afterwards all drawing coordinates are in CSS px
+            });
+        }
+
+        // FIX: call this whenever design screen is shown or window resizes.
+        function ensureCanvasReady() {
+            // We wait a frame to ensure layout completed if the screen was just shown
+            requestAnimationFrame(() => {
+                setCanvasSizeToContainer();
+                // redraw current frame & onion if any
+                if (frames[activeFrame]) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        ctx.drawImage(img, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                    };
+                    img.src = frames[activeFrame];
+                } else {
+                    ctx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                }
+
+                if (onionSkinActive && frames[activeFrame - 1]) {
+                    const pimg = new Image();
+                    pimg.onload = () => {
+                        onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        onionSkinCtx.globalAlpha = 0.35;
+                        onionSkinCtx.drawImage(pimg, 0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                        onionSkinCtx.globalAlpha = 1;
+                    };
+                    pimg.src = frames[activeFrame - 1];
+                } else {
+                    onionSkinCtx.clearRect(0, 0, canvasContainer.clientWidth, canvasContainer.clientHeight);
+                }
+            });
+        }
+
+        // -----------------------
+        // Event Listeners for home screen
+        function showHomeScreen() {
+            homeScreen.classList.remove('hidden');
+            designScreen.classList.add('hidden');
+        }
+
+        function showDesignScreen() {
+            homeScreen.classList.add('hidden');
+            designScreen.classList.remove('hidden');
+            // FIX: initialize/rescale canvas now that design screen is visible
+            ensureCanvasReady();
+        }
+
+        function renderProjects() {
+            proyectosContent.innerHTML = '';
+            projects.forEach((project, idx) => {
+                const projectCard = document.createElement('div');
+                projectCard.className = 'bg-white rounded-xl shadow-lg overflow-hidden relative cursor-pointer';
+                projectCard.innerHTML = `
+                    <div class="w-full h-48 bg-gray-200 flex items-center justify-center p-2">
+                        <img src="${project.img}" alt="${project.name}" class="rounded-lg object-cover w-full h-full">
+                    </div>
+                    <div class="p-2 text-center">
+                        <p class="text-sm font-semibold text-gray-700">${project.name}</p>
+                        <p class="text-xs text-gray-500">${project.time} | ${project.fps}</p>
+                    </div>
+                    <div class="absolute top-2 right-2 flex items-center bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full">
+                        <span class="mr-1">${project.time}</span>
+                        <span class="mr-1">|</span>
+                        <span>${project.fps}</span>
+                    </div>
+                `;
+                // FIX: add click handler to open project (antes no se abría)
+                projectCard.addEventListener('click', () => openProject(idx));
+                proyectosContent.appendChild(projectCard);
+            });
+        }
+
+        function setActiveTab(activeTab) {
+            const tabs = [proyectosTab, peliculasTab];
+            const contents = [proyectosContent, peliculasContent];
+            
+            tabs.forEach((tab, index) => {
+                const indicator = tab.querySelector('.tab-indicator');
+                if (tab === activeTab) {
+                    tab.classList.add('text-red-500');
+                    tab.classList.remove('text-gray-600');
+                    indicator.classList.remove('w-0');
+                    indicator.classList.add('w-2/3');
+                    contents[index].classList.remove('hidden');
+                } else {
+                    tab.classList.add('text-gray-600');
+                    tab.classList.remove('text-red-500');
+                    indicator.classList.remove('w-2/3');
+                    indicator.classList.add('w-0');
+                    contents[index].classList.add('hidden');
+                }
+            });
+        }
+
+        proyectosTab.addEventListener('click', () => setActiveTab(proyectosTab));
+        peliculasTab.addEventListener('click', () => setActiveTab(peliculasTab));
+        
+        addProjectBtn.addEventListener('click', () => {
+            newProjectModal.classList.remove('hidden');
+        });
+
+        cancelButton.addEventListener('click', () => {
+            newProjectModal.classList.add('hidden');
+        });
+
+        createButton.addEventListener('click', () => {
+            const newProjectName = `nuevo proyecto ${projects.length + 1}`;
+            projects.push({
+                name: newProjectName,
+                time: '00:00',
+                fps: '24 fps',
+                img: `https://placehold.co/200x200/cccccc/ffffff?text=${encodeURIComponent(newProjectName)}`,
+                frames: [''] // FIX: create empty frame array so editor opens with a blank frame
+            });
+            renderProjects();
+            newProjectModal.classList.add('hidden');
+            // Abrir el nuevo proyecto
+            openProject(projects.length - 1);
+        });
+
+        closeBtn.addEventListener('click', () => {
+            showHomeScreen();
+            // Pausar animación si se está reproduciendo
+            if (isPlaying) {
+                pauseAnimation();
+            }
+            // Guardar estado actual si hay proyecto abierto
+            saveCurrentProject();
+        });
+
+        // Canvas Drawing Logic
+        function initCanvas() {
+            // FIX: No forzamos un canvasSize fijo. Usamos setCanvasSizeToContainer
+            setCanvasSizeToContainer();
+
+            // Estilos iniciales
+            ctx.setTransform(1,0,0,1,0,0); // reset
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = currentSize;
+
+            onionSkinCtx.setTransform(1,0,0,1,0,0);
+            selectionCtx.setTransform(1,0,0,1,0,0);
+        }
+        
+        // Función para redimensionar los lienzos
+        function resizeCanvas() {
+            // FIX: redirige a setCanvasSizeToContainer para mantener consistencia
+            setCanvasSizeToContainer();
+        }
+
+        window.addEventListener('resize', () => {
+            // Si el diseño está visible, reajustamos los canvas
+            if (!designScreen.classList.contains('hidden')) {
+                ensureCanvasReady();
+            }
+        });
+
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+            if (clientX == null || clientY == null) return;
+            
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+            if (currentTool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.globalCompositeOperation = 'source-over';
+            } else if (currentTool === 'brush') {
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            } else if (currentTool === 'lasso') {
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                selectionCtx.strokeStyle = '#00f';
+                selectionCtx.setLineDash([5, 5]);
+                selectionCtx.lineWidth = 1;
+                selectionCtx.beginPath();
+                selectionCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => selectionCtx.lineTo(p.x, p.y));
+                selectionCtx.lineTo(x, y);
+                selectionCtx.stroke();
+                lassoPoints.push({x, y});
+            }
+            
+            [lastX, lastY] = [x, y];
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+            if (clientX == null || clientY == null) return;
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            [lastX, lastY] = [x, y];
+            
+            if (currentTool === 'lasso') {
+                lassoPoints = [{x, y}];
+                selectedImageData = null;
+                deleteSelectionBtn.classList.add('hidden');
+            } else {
+                if (historyIndex < history.length - 1) {
+                    history = history.slice(0, historyIndex + 1);
+                }
+                // Guardar el estado actual del lienzo para el historial
+                history.push(canvas.toDataURL());
+                historyIndex++;
+            }
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+            
+            if (currentTool === 'lasso' && lassoPoints.length > 2) {
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                selectionCtx.setLineDash([]);
+                
+                // Create clipping path on a temporary canvas to extract selection
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                tempCtx.beginPath();
+                tempCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => tempCtx.lineTo(p.x, p.y));
+                tempCtx.closePath();
+                tempCtx.clip();
+                tempCtx.drawImage(canvas, 0, 0);
+
+                // Get selected image data
+                const minX = Math.min(...lassoPoints.map(p => p.x));
+                const minY = Math.min(...lassoPoints.map(p => p.y));
+                const maxX = Math.max(...lassoPoints.map(p => p.x));
+                const maxY = Math.max(...lassoPoints.map(p => p.y));
+                const width = Math.max(1, maxX - minX);
+                const height = Math.max(1, maxY - minY);
+                
+                selectedImageData = tempCtx.getImageData(minX, minY, width, height);
+
+                // Clear the selected area from the main canvas
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // Draw a dashed path on selection canvas for user feedback
+                selectionCtx.strokeStyle = '#00f';
+                selectionCtx.setLineDash([5, 5]);
+                selectionCtx.lineWidth = 1;
+                selectionCtx.beginPath();
+                selectionCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => selectionCtx.lineTo(p.x, p.y));
+                selectionCtx.closePath();
+                selectionCtx.stroke();
+
+                deleteSelectionBtn.classList.remove('hidden');
+            } else {
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+                deleteSelectionBtn.classList.add('hidden');
+            }
+
+            // Guardar el estado del frame actual (si hay proyecto abierto)
+            saveFrame();
+        }
+
+        function handleLassoMove(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+            if (clientX == null || clientY == null) return;
+            
+            const x = (clientX - rect.left) * (canvas.width / rect.width);
+            const y = (clientY - rect.top) * (canvas.height / rect.height);
+            
+            const dx = x - selectionStartOffset.x;
+            const dy = y - selectionStartOffset.y;
+
+            // Redibuja el lienzo sin la selección
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const backgroundDataURL = frames[activeFrame] || '';
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                tempCtx.drawImage(img, 0, 0);
+                tempCtx.globalCompositeOperation = 'destination-out';
+                tempCtx.beginPath();
+                tempCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => tempCtx.lineTo(p.x, p.y));
+                tempCtx.closePath();
+                tempCtx.fill();
+                tempCtx.globalCompositeOperation = 'source-over';
+                
+                ctx.drawImage(tempCanvas, 0, 0);
+                
+                if (selectedImageData) {
+                    ctx.putImageData(selectedImageData, dx + Math.min(...lassoPoints.map(p => p.x)), dy + Math.min(...lassoPoints.map(p => p.y)));
+                }
+            };
+            img.src = backgroundDataURL;
+        }
+
+        function handleLassoMoveEnd(e) {
+            isMoving = false;
+            // Guardar el estado final del movimiento
+            saveFrame();
+            history.push(canvas.toDataURL());
+            historyIndex++;
+        }
+        
+        canvas.addEventListener('mousedown', (e) => {
+            if (currentTool === 'lasso' && selectedImageData) {
+                isMoving = true;
+                const rect = canvas.getBoundingClientRect();
+                selectionStartOffset.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+                selectionStartOffset.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            } else {
+                startDrawing(e);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isMoving) {
+                handleLassoMove(e);
+            } else {
+                draw(e);
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isMoving) {
+                handleLassoMoveEnd(e);
+            } else {
+                stopDrawing();
+            }
+        });
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (currentTool === 'lasso' && selectedImageData) {
+                isMoving = true;
+                const rect = canvas.getBoundingClientRect();
+                selectionStartOffset.x = (e.touches[0].clientX - rect.left) * (canvas.width / rect.width);
+                selectionStartOffset.y = (e.touches[0].clientY - rect.top) * (canvas.height / rect.height);
+            } else {
+                startDrawing(e);
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isMoving) {
+                handleLassoMove(e);
+            } else {
+                draw(e);
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (isMoving) {
+                handleLassoMoveEnd(e);
+            } else {
+                stopDrawing();
+            }
+        });
+
+        // Tool Logic
+        function selectTool(tool) {
+            currentTool = tool;
+            toolButtons.forEach(btn => btn.classList.remove('active'));
+            if (tool === 'brush') {
+                brushToolBtn.classList.add('active');
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            } else if (tool === 'eraser') {
+                eraserToolBtn.classList.add('active');
+                ctx.lineWidth = currentSize * 2;
+            } else if (tool === 'lasso') {
+                lassoToolBtn.classList.add('active');
+                ctx.lineWidth = 1;
+            }
+            selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+            deleteSelectionBtn.classList.add('hidden');
+        }
+
+        brushToolBtn.addEventListener('click', () => selectTool('brush'));
+        eraserToolBtn.addEventListener('click', () => selectTool('eraser'));
+        lassoToolBtn.addEventListener('click', () => selectTool('lasso'));
+
+        deleteSelectionBtn.addEventListener('click', () => {
+            if (selectedImageData) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const backgroundDataURL = frames[activeFrame] || '';
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    // Clear the selected area from the canvas
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.beginPath();
+                    ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                    lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.globalCompositeOperation = 'source-over';
+                    saveFrame();
+                    history.push(canvas.toDataURL());
+                    historyIndex++;
+                };
+                img.src = backgroundDataURL;
+                
+                selectedImageData = null;
+                deleteSelectionBtn.classList.add('hidden');
+                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
+            }
+        });
+
+        colorPicker.addEventListener('input', (e) => {
+            currentColor = e.target.value;
+            if (currentTool === 'brush') {
+                ctx.strokeStyle = currentColor;
+            }
+        });
+
+        brushSize.addEventListener('input', (e) => {
+            currentSize = e.target.value;
+            if (currentTool === 'brush') {
+                ctx.lineWidth = currentSize;
+            } else if (currentTool === 'eraser') {
+                ctx.lineWidth = currentSize * 2;
+            }
+        });
+
+        // Undo/Redo Logic
+        undoBtn.addEventListener('click', () => {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const tempImage = new Image();
+                tempImage.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(tempImage, 0, 0);
+                    saveFrame();
+                };
+                tempImage.src = history[historyIndex];
+            }
+        });
+
+        redoBtn.addEventListener('click', () => {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                const tempImage = new Image();
+                tempImage.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(tempImage, 0, 0);
+                    saveFrame();
+                };
+                tempImage.src = history[historyIndex];
+            }
+        });
+        
+        // Animation Logic
+        function saveFrame() {
+            // FIX: guardamos frame sólo si hay proyecto abierto; si no, lo guardamos localmente en frames
+            frames[activeFrame] = canvas.toDataURL();
+            if (currentProjectIndex !== null) {
+                projects[currentProjectIndex].frames = frames.slice();
+            }
+            // (Opcional) podrías persistir toda la lista de proyectos en localStorage aquí
+        }
+
+        function loadFrame(frameIndex) {
+            // Guardar el fotograma actual antes de cambiar
+            saveFrame();
+            activeFrame = frameIndex;
+            
+            // Limpiar
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+            
+            // Cargar capa anterior como 'capa cebolla' si está activa y no es el primer fotograma
+            if (onionSkinActive && frameIndex > 0 && frames[frameIndex - 1]) {
+                const prevImg = new Image();
+                prevImg.onload = () => {
+                    onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+                    onionSkinCtx.drawImage(prevImg, 0, 0, canvas.width, canvas.height);
+                };
+                prevImg.src = frames[frameIndex - 1];
+            } else {
+                onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+            }
+
+            // Cargar fotograma actual
+            const currentImg = new Image();
+            currentImg.onload = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+                // Limpiar el historial y guardar el estado inicial del nuevo frame
+                history = [canvas.toDataURL()];
+                historyIndex = 0;
+            };
+            // FIX: si frames[frameIndex] es '' o undefined, no intentamos cargarlo como imagen
+            if (frames[frameIndex]) {
+                currentImg.src = frames[frameIndex];
+            } else {
+                // frame vacío -> lienzo limpio
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                history = [canvas.toDataURL()];
+                historyIndex = 0;
+            }
+
+            updateFramePreviews();
+        }
+
+        function addFrame() {
+            saveFrame();
+            // Si el fotograma activo tiene contenido, crea una copia en el siguiente fotograma
+            const nextFrameData = frames[activeFrame] || null;
+            frames.splice(activeFrame + 1, 0, nextFrameData);
+            activeFrame++;
+            loadFrame(activeFrame);
+            updateFramePreviews();
+        }
+
+        function updateFramePreviews() {
+            framesContainer.innerHTML = '';
+            frames.forEach((frameData, index) => {
+                const frameEl = document.createElement('div');
+                frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
+                frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
+                frameEl.style.backgroundSize = 'contain';
+                frameEl.style.backgroundPosition = 'center';
+                frameEl.style.backgroundColor = '#fff';
+                frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
+                frameEl.addEventListener('click', () => {
+                    if (isPlaying) {
+                        pauseAnimation();
+                    }
+                    loadFrame(index);
+                });
+                framesContainer.appendChild(frameEl);
+            });
+            // Desplazar la línea de tiempo para mostrar el fotograma activo
+            const activeFrameEl = framesContainer.querySelector('.frame-preview.active');
+            if (activeFrameEl) {
+                framesContainer.scrollLeft = activeFrameEl.offsetLeft - (framesContainer.offsetWidth / 2) + (activeFrameEl.offsetWidth / 2);
+            }
+        }
+        
+        addFrameBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                pauseAnimation();
+            }
+            addFrame();
+        });
+
+        function playAnimation() {
+            if (isPlaying) return;
+            if (frames.length === 0) return;
+            isPlaying = true;
+            playBtn.innerHTML = pauseIcon;
+            let currentFrameIndex = activeFrame;
+            animationInterval = setInterval(() => {
+                currentFrameIndex = (currentFrameIndex + 1) % frames.length;
+                loadFrame(currentFrameIndex);
+            }, 1000 / fps); // Usa la variable fps
+        }
+
+        function pauseAnimation() {
+            isPlaying = false;
+            playBtn.innerHTML = playIcon;
+            clearInterval(animationInterval);
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                pauseAnimation();
+            } else {
+                playAnimation();
+            }
+        });
+
+        // Onion Skin Logic
+        onionSkinBtn.addEventListener('click', () => {
+            onionSkinActive = !onionSkinActive;
+            onionSkinBtn.classList.toggle('active', onionSkinActive);
+            loadFrame(activeFrame);
+        });
+        onionSkinBtn.classList.add('active'); // Mantiene el botón de la capa cebolla activo
+
+        // Layer Panel Logic
+        layerBtn.addEventListener('click', () => {
+            layerPanel.classList.add('active');
+            renderLayers();
+        });
+
+        closeLayerPanelBtn.addEventListener('click', () => {
+            layerPanel.classList.remove('active');
+        });
+
+        addLayerBtn.addEventListener('click', () => {
+            layers.push({ id: Date.now(), visible: true, data: [] });
+            renderLayers();
+        });
+
+        function renderLayers() {
+            layersList.innerHTML = '';
+            layers.forEach((layer, index) => {
+                const layerEl = document.createElement('div');
+                layerEl.className = 'layer-item';
+                layerEl.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-grip-vertical text-gray-400 drag-handle"></i>
+                        <span>Capa ${index + 1}</span>
+                    </div>
+                    <button class="text-gray-500 hover:text-red-500" onclick="toggleLayer(${index})">
+                        <i class="fas fa-eye${layer.visible ? '' : '-slash'}"></i>
+                    </button>
+                `;
+                layerEl.dataset.index = index;
+                layersList.appendChild(layerEl);
+
+                // Swipe logic
+                let startX;
+                layerEl.addEventListener('touchstart', (e) => {
+                    startX = e.touches[0].clientX;
+                });
+
+                layerEl.addEventListener('touchmove', (e) => {
+                    let currentX = e.touches[0].clientX;
+                    let diff = startX - currentX;
+                    if (diff > 50) {
+                        layerEl.classList.add('swiped');
+                    } else if (diff < -50) {
+                        layerEl.classList.remove('swiped');
+                    }
+                });
+            });
+            setupDragAndDrop();
+        }
+
+        function setupDragAndDrop() {
+            const list = document.getElementById('layersList');
+            let draggingEl;
+
+            list.addEventListener('dragstart', (e) => {
+                draggingEl = e.target.closest('.layer-item');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggingEl.dataset.index);
+            });
+
+            list.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const targetEl = e.target.closest('.layer-item');
+                if (targetEl && targetEl !== draggingEl) {
+                    const rect = targetEl.getBoundingClientRect();
+                    const next = (e.clientY - rect.top) / rect.height > 0.5;
+                    list.insertBefore(draggingEl, next ? targetEl.nextSibling : targetEl);
+                }
+            });
+
+            list.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const newOrder = Array.from(list.children).map(el => layers[el.dataset.index]);
+                layers = newOrder;
+                renderLayers();
+            });
+        }
+        
+        function toggleLayer(index) {
+            layers[index].visible = !layers[index].visible;
+            renderLayers();
+            updateCanvasLayers();
+        }
+
+        function updateCanvasLayers() {
+            // Placeholder
+            // Aquí podrías volver a renderizar todas las capas visibles en el canvas principal
+            console.log("Updating canvas layers...");
+        }
+
+        // Abrir proyecto existente
+        function openProject(index) {
+            currentProjectIndex = index;
+            const project = projects[index];
+            frames = project.frames && project.frames.length ? project.frames.slice() : [''];
+            activeFrame = 0;
+            showDesignScreen();
+            initCanvas(); // FIX: inicializamos y dimensionamos aquí
+            loadFrame(activeFrame);
+            updateFramePreviews();
+        }
+
+        // Guardar proyecto en array
+        function saveCurrentProject() {
+            if (currentProjectIndex === null) return;
+            projects[currentProjectIndex].frames = frames.slice();
+            // Si quieres persistir, puedes usar localStorage aquí:
+            // localStorage.setItem('mi_proyectos', JSON.stringify(projects));
+        }
+
+        // Initial rendering
+        window.onload = () => {
+            renderProjects();
+            setActiveTab(proyectosTab);
+            // NOTA: no llamar resizeCanvas() aquí porque el designScreen suele estar oculto;
+            // initCanvas / setCanvasSizeToContainer se llaman cuando se abre el editor (openProject / showDesignScreen)
+        };
+    </script>
+</body>
+</html>
