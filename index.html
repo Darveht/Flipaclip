@@ -677,11 +677,16 @@
             updateCanvasSize();
         }
 
+        // MEJORA: Debounce para el resize del window para mejor rendimiento
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            // Si el diseño está visible, reajustamos los canvas
-            if (!designScreen.classList.contains('hidden')) {
-                ensureCanvasReady();
-            }
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                // Si el diseño está visible, reajustamos los canvas
+                if (!designScreen.classList.contains('hidden')) {
+                    ensureCanvasReady();
+                }
+            }, 150); // Esperar 150ms después del último resize
         });
 
 
