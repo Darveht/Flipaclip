@@ -191,6 +191,11 @@
             overflow: hidden;
         }
 
+        .layer-item.active {
+            background-color: #fee2e2;
+            border: 2px solid #dc2626;
+        }
+
         .layer-item .drag-handle {
             cursor: grab;
         }
@@ -206,6 +211,7 @@
             bottom: 0;
             padding: 0 1rem;
             transition: right 0.2s ease-in-out;
+            cursor: pointer;
         }
 
         .layer-item.swiped .layer-actions {
@@ -575,15 +581,6 @@
     </div>
 
     <script>
-        // -------------------------------------------------------
-        // Hechos desde tu código original; aquí aplico fixes
-        // - FIX 1: canvas CSS y posición para que el rect tenga tamaño
-        // - FIX 2: inicializar tamaños de canvas con devicePixelRatio
-        // - FIX 3: inicializar el lienzo al mostrar la pantalla de diseño
-        // - FIX 4: manejar frames vacíos sin intentar dibujar imagen vacía
-        // - FIX 5: permitir abrir proyecto al tocar la tarjeta (event listener)
-        // -------------------------------------------------------
-
         // DOM Elements
         const homeScreen = document.getElementById('homeScreen');
         const designScreen = document.getElementById('designScreen');
@@ -640,6 +637,9 @@
         let lastY = 0;
         let history = [];
         let historyIndex = -1;
+        
+        // El nuevo estado de fotogramas ahora es un array de objetos
+        // Cada objeto representa un fotograma y contiene un array de capas
         let frames = [];
         let activeFrame = 0;
         let animationInterval;
@@ -649,10 +649,10 @@
         let isMoving = false;
         let selectedImageData = null;
         let selectionStartOffset = {x: 0, y: 0};
-        let fps = 12; // Nuevo estado para FPS
+        let fps = 12;
 
-        // Layers state
-        let layers = [];
+        // El estado de capas se mueve dentro de cada fotograma
+        let layers = [{ id: 1, visible: true, data: '' }];
         let activeLayer = 0;
 
         // Configuration
@@ -668,12 +668,10 @@
         // --- FIX FUNCTIONS ---
         // -----------------------
 
-        // Función simplificada para configurar el tamaño del canvas
         function setCanvasSizeToContainer() {
             const containerRect = canvasContainer.getBoundingClientRect();
             
             if (containerRect.width === 0 || containerRect.height === 0) {
-                // Si el contenedor no tiene dimensiones, usar valores por defecto
                 const canvasWidth = Math.min(window.innerWidth * 0.9, 600);
                 const canvasHeight = canvasWidth / (16/9);
                 
@@ -684,7 +682,6 @@
                     c.style.height = canvasHeight + 'px';
                 });
             } else {
-                // Usar las dimensiones del contenedor completas
                 const canvasWidth = containerRect.width;
                 const canvasHeight = containerRect.height;
 
@@ -696,68 +693,73 @@
                 });
             }
 
-            // Reconfigurar contexto de dibujo
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = currentColor;
             ctx.lineWidth = currentSize;
             ctx.globalCompositeOperation = 'source-over';
             
-            // Limpiar selection canvas para evitar interferencias
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
         }
 
-        // Función mejorada para asegurar que el canvas esté listo
         function ensureCanvasReady() {
-            // Configurar tamaño inmediatamente
             setCanvasSizeToContainer();
-            
-            // Esperar un frame para asegurar que el layout esté completo
             requestAnimationFrame(() => {
-                // Verificar si necesitamos reconfigurar el tamaño
                 if (!designScreen.classList.contains('hidden')) {
                     const rect = canvasContainer.getBoundingClientRect();
                     if (rect.width > 0 && rect.height > 0) {
                         setCanvasSizeToContainer();
                     }
                 }
-                
-                // Redibujar contenido
                 redrawCanvas();
             });
         }
 
-        // Nueva función para redibujar el contenido del canvas
         function redrawCanvas() {
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
             
-            // Limpiar todos los canvas
             ctx.clearRect(0, 0, canvasWidth, canvasHeight);
             onionSkinCtx.clearRect(0, 0, canvasWidth, canvasHeight);
             selectionCtx.clearRect(0, 0, canvasWidth, canvasHeight);
             
-            // Redibujar frame actual si existe
-            if (frames[activeFrame]) {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-                };
-                img.src = frames[activeFrame];
+            // Redibujar Onion Skin (Papel Cebolla)
+            if (onionSkinActive && activeFrame > 0 && frames[activeFrame - 1]) {
+                const prevFrameLayers = frames[activeFrame - 1].layers;
+                prevFrameLayers.forEach(layer => {
+                    if (layer.visible && layer.data) {
+                        const img = new Image();
+                        img.onload = () => {
+                            onionSkinCtx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                        };
+                        img.src = layer.data;
+                    }
+                });
             }
 
-            // Redibujar onion skin si está activo
-            if (onionSkinActive && activeFrame > 0 && frames[activeFrame - 1]) {
-                const pimg = new Image();
-                pimg.onload = () => {
-                    onionSkinCtx.drawImage(pimg, 0, 0, canvasWidth, canvasHeight);
-                };
-                pimg.src = frames[activeFrame - 1];
+            // Redibujar el fotograma actual, capa por capa
+            if (frames[activeFrame] && frames[activeFrame].layers) {
+                const currentFrameLayers = frames[activeFrame].layers;
+                currentFrameLayers.forEach((layer, index) => {
+                    if (layer.visible && layer.data) {
+                        const img = new Image();
+                        img.onload = () => {
+                            // Si es la capa activa, dibujamos en el canvas principal
+                            if (index === activeLayer) {
+                                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                            }
+                        };
+                        img.src = layer.data;
+                    }
+                });
+            } else {
+                 // Si el fotograma no existe, creamos el fotograma y la capa inicial
+                frames[activeFrame] = { layers: [{ id: Date.now(), visible: true, data: '' }] };
+                layers = frames[activeFrame].layers;
+                activeLayer = 0;
             }
         }
 
-        // -----------------------
-        // Event Listeners for home screen
         function showHomeScreen() {
             homeScreen.classList.remove('hidden');
             designScreen.classList.add('hidden');
@@ -766,10 +768,9 @@
         function showDesignScreen() {
             homeScreen.classList.add('hidden');
             designScreen.classList.remove('hidden');
-            // Configurar canvas inmediatamente al mostrar la pantalla
             setTimeout(() => {
                 ensureCanvasReady();
-            }, 50); // Pequeño delay para asegurar que el DOM se haya actualizado
+            }, 50);
         }
 
         function renderProjects() {
@@ -791,7 +792,6 @@
                         <span>${project.fps}</span>
                     </div>
                 `;
-                // FIX: add click handler to open project (antes no se abría)
                 projectCard.addEventListener('click', () => openProject(idx));
                 proyectosContent.appendChild(projectCard);
             });
@@ -832,53 +832,44 @@
 
         createButton.addEventListener('click', () => {
             const newProjectName = `nuevo proyecto ${projects.length + 1}`;
+            // Crear un nuevo proyecto con un fotograma y una capa inicial
             projects.push({
                 name: newProjectName,
                 time: '00:00',
                 fps: '12 fps',
                 img: `https://placehold.co/200x200/cccccc/ffffff?text=${encodeURIComponent(newProjectName)}`,
-                frames: [''] // FIX: create empty frame array so editor opens with a blank frame
+                frames: [{ layers: [{ id: Date.now(), visible: true, data: '' }] }]
             });
             saveToLocalStorage();
             renderProjects();
             newProjectModal.classList.add('hidden');
-            // Abrir el nuevo proyecto
             openProject(projects.length - 1);
         });
 
         closeBtn.addEventListener('click', () => {
             showHomeScreen();
-            // Pausar animación si se está reproduciendo
             if (isPlaying) {
                 pauseAnimation();
             }
-            // Guardar estado actual si hay proyecto abierto
             saveCurrentProject();
         });
 
         // Canvas Drawing Logic
         function initCanvas() {
-            // Asegurar que el canvas tenga el tamaño correcto
             setCanvasSizeToContainer();
-
-            // Estilos iniciales para el contexto de dibujo
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = currentColor;
             ctx.lineWidth = currentSize;
 
-            // Reinicializar el historial con el estado actual
             history = [canvas.toDataURL()];
             historyIndex = 0;
         }
         
-        // Función para redimensionar los lienzos
         function resizeCanvas() {
-            // FIX: redirige a setCanvasSizeToContainer para mantener consistencia
             setCanvasSizeToContainer();
         }
 
-        // Manejador de redimensionamiento con debounce
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
@@ -886,13 +877,11 @@
                 if (!designScreen.classList.contains('hidden')) {
                     ensureCanvasReady();
                 } else {
-                    // Incluso si está oculto, actualizar para futuras aperturas
                     setCanvasSizeToContainer();
                 }
             }, 100);
         });
 
-        // Manejador para cambios de orientación en móviles
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 if (!designScreen.classList.contains('hidden')) {
@@ -900,7 +889,7 @@
                 } else {
                     setCanvasSizeToContainer();
                 }
-            }, 200); // Delay más largo para orientationchange
+            }, 200);
         });
 
 
@@ -952,7 +941,6 @@
             [lastX, lastY] = [x, y];
         }
 
-        // Paint bucket fill function
         function floodFill(x, y, fillColor) {
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
@@ -967,7 +955,6 @@
             const index = (y * width + x) * 4;
             const targetColor = [data[index], data[index + 1], data[index + 2], data[index + 3]];
             
-            // Convert hex color to RGB
             const hex = fillColor.replace('#', '');
             const newColor = [
                 parseInt(hex.substr(0, 2), 16),
@@ -976,7 +963,6 @@
                 255
             ];
             
-            // Don't fill if colors are the same
             if (targetColor[0] === newColor[0] && targetColor[1] === newColor[1] && 
                 targetColor[2] === newColor[2] && targetColor[3] === newColor[3]) {
                 return;
@@ -1002,13 +988,11 @@
                 
                 visited.add(key);
                 
-                // Fill pixel
                 data[currentIndex] = newColor[0];
                 data[currentIndex + 1] = newColor[1];
                 data[currentIndex + 2] = newColor[2];
                 data[currentIndex + 3] = newColor[3];
                 
-                // Add neighbors to stack
                 stack.push({x: currentX + 1, y: currentY});
                 stack.push({x: currentX - 1, y: currentY});
                 stack.push({x: currentX, y: currentY + 1});
@@ -1034,7 +1018,6 @@
                 if (historyIndex < history.length - 1) {
                     history = history.slice(0, historyIndex + 1);
                 }
-                // Guardar el estado actual del lienzo para el historial
                 history.push(canvas.toDataURL());
                 historyIndex++;
             }
@@ -1047,7 +1030,6 @@
                 selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
                 selectionCtx.setLineDash([]);
                 
-                // Create clipping path on a temporary canvas to extract selection
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
@@ -1060,7 +1042,6 @@
                 tempCtx.clip();
                 tempCtx.drawImage(canvas, 0, 0);
 
-                // Get selected image data
                 const minX = Math.min(...lassoPoints.map(p => p.x));
                 const minY = Math.min(...lassoPoints.map(p => p.y));
                 const maxX = Math.max(...lassoPoints.map(p => p.x));
@@ -1070,7 +1051,6 @@
                 
                 selectedImageData = tempCtx.getImageData(minX, minY, width, height);
 
-                // Clear the selected area from the main canvas
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.beginPath();
                 ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
@@ -1079,7 +1059,6 @@
                 ctx.fill();
                 ctx.globalCompositeOperation = 'source-over';
                 
-                // Draw a dashed path on selection canvas for user feedback
                 selectionCtx.strokeStyle = '#00f';
                 selectionCtx.setLineDash([5, 5]);
                 selectionCtx.lineWidth = 1;
@@ -1091,12 +1070,10 @@
 
                 deleteSelectionBtn.classList.remove('hidden');
             } else {
-                // Siempre limpiar el selection canvas cuando no sea lasso
                 selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
                 deleteSelectionBtn.classList.add('hidden');
             }
 
-            // Guardar el estado del frame actual y actualizar miniatura
             saveFrame();
             updateFramePreviews();
             saveToLocalStorage();
@@ -1110,13 +1087,15 @@
             const dx = x - selectionStartOffset.x;
             const dy = y - selectionStartOffset.y;
 
-            // Redibuja el lienzo sin la selección
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const backgroundDataURL = frames[activeFrame] || '';
+            // Dibuja todas las capas excepto la capa activa en el canvas principal
+            redrawCanvasLayers(false);
+            
+            // Dibuja la capa activa sin la selección en un canvas temporal
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
             const tempCtx = tempCanvas.getContext('2d');
+            const activeLayerDataURL = frames[activeFrame].layers[activeLayer].data;
             const img = new Image();
             img.onload = () => {
                 tempCtx.drawImage(img, 0, 0);
@@ -1128,18 +1107,29 @@
                 tempCtx.fill();
                 tempCtx.globalCompositeOperation = 'source-over';
                 
+                // Dibuja el resultado en el canvas principal
                 ctx.drawImage(tempCanvas, 0, 0);
                 
+                // Dibuja la selección movida en el canvas principal
                 if (selectedImageData) {
                     ctx.putImageData(selectedImageData, dx + Math.min(...lassoPoints.map(p => p.x)), dy + Math.min(...lassoPoints.map(p => p.y)));
                 }
             };
-            img.src = backgroundDataURL;
+            img.src = activeLayerDataURL;
         }
 
         function handleLassoMoveEnd(e) {
             isMoving = false;
-            // Guardar el estado final del movimiento
+            // Dibuja la capa activa final en un canvas temporal
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            // Actualiza la capa activa con la nueva imagen
+            frames[activeFrame].layers[activeLayer].data = tempCanvas.toDataURL();
+
             saveFrame();
             updateFramePreviews();
             history.push(canvas.toDataURL());
@@ -1150,7 +1140,6 @@
             if (currentTool === 'paintBucket') {
                 const coords = getCanvasCoordinates(e);
                 if (coords) {
-                    // Save state for undo
                     if (historyIndex < history.length - 1) {
                         history = history.slice(0, historyIndex + 1);
                     }
@@ -1197,7 +1186,6 @@
             if (currentTool === 'paintBucket') {
                 const coords = getCanvasCoordinates(e);
                 if (coords) {
-                    // Save state for undo
                     if (historyIndex < history.length - 1) {
                         history = history.slice(0, historyIndex + 1);
                     }
@@ -1245,7 +1233,6 @@
             currentTool = tool;
             sidebarTools.forEach(btn => btn.classList.remove('active'));
             
-            // Siempre limpiar el canvas de selección al cambiar herramientas
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
             deleteSelectionBtn.classList.add('hidden');
             selectedImageData = null;
@@ -1271,20 +1258,17 @@
             }
         }
 
-        // Sidebar toggle
         toggleToolbarBtn.addEventListener('click', () => {
             toolSidebar.classList.toggle('open');
             drawingArea.classList.toggle('sidebar-open');
         });
 
-        // Tool selection
         sidebarTools.forEach(tool => {
             tool.addEventListener('click', () => {
                 selectTool(tool.dataset.tool);
             });
         });
 
-        // Color picker and presets
         currentColorDisplay.addEventListener('click', () => {
             colorPicker.click();
         });
@@ -1312,7 +1296,6 @@
             });
         });
 
-        // Brush size control
         brushSize.addEventListener('input', (e) => {
             currentSize = e.target.value;
             brushSizeDisplay.textContent = currentSize;
@@ -1326,11 +1309,10 @@
         deleteSelectionBtn.addEventListener('click', () => {
             if (selectedImageData) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                const backgroundDataURL = frames[activeFrame] || '';
+                const backgroundDataURL = frames[activeFrame].layers[activeLayer].data || '';
                 const img = new Image();
                 img.onload = () => {
                     ctx.drawImage(img, 0, 0);
-                    // Clear the selected area from the canvas
                     ctx.globalCompositeOperation = 'destination-out';
                     ctx.beginPath();
                     ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
@@ -1338,6 +1320,9 @@
                     ctx.closePath();
                     ctx.fill();
                     ctx.globalCompositeOperation = 'source-over';
+                    
+                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
+                    
                     saveFrame();
                     updateFramePreviews();
                     history.push(canvas.toDataURL());
@@ -1375,6 +1360,7 @@
                 tempImage.onload = () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
+                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
                     saveFrame();
                     updateFramePreviews();
                 };
@@ -1389,6 +1375,7 @@
                 tempImage.onload = () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
+                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
                     saveFrame();
                     updateFramePreviews();
                 };
@@ -1398,90 +1385,120 @@
         
         // Animation Logic
         function saveFrame() {
-            // FIX: guardamos frame sólo si hay proyecto abierto; si no, lo guardamos localmente en frames
-            frames[activeFrame] = canvas.toDataURL();
-            if (currentProjectIndex !== null) {
-                projects[currentProjectIndex].frames = frames.slice();
-            }
-            // (Opcional) podrías persistir toda la lista de proyectos en localStorage aquí
+            if (currentProjectIndex === null) return;
+            // Guardar el estado de la capa activa en el fotograma actual
+            frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
+            projects[currentProjectIndex].frames = frames.slice();
         }
 
-        function loadFrame(frameIndex) {
-            // Guardar el fotograma actual antes de cambiar
+        // Dibuja todas las capas de un fotograma en un canvas temporal
+        async function renderFrameToImage(frameIndex) {
+            if (!frames[frameIndex] || !frames[frameIndex].layers) return null;
+            
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            const layersToDraw = frames[frameIndex].layers.filter(layer => layer.visible);
+            
+            for (const layer of layersToDraw) {
+                if (layer.data) {
+                    const img = new Image();
+                    img.src = layer.data;
+                    await new Promise(resolve => img.onload = resolve);
+                    tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+                }
+            }
+            return tempCanvas.toDataURL();
+        }
+
+        async function loadFrame(frameIndex) {
             saveFrame();
             activeFrame = frameIndex;
             
-            // Limpiar
+            // Reemplaza el array de capas global con el del fotograma cargado
+            layers = frames[activeFrame].layers;
+            activeLayer = Math.min(activeLayer, layers.length - 1);
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
             
-            // Cargar capa anterior como 'capa cebolla' si está activa y no es el primer fotograma
-            if (onionSkinActive && frameIndex > 0 && frames[frameIndex - 1]) {
-                const prevImg = new Image();
-                prevImg.onload = () => {
-                    onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
-                    onionSkinCtx.drawImage(prevImg, 0, 0, canvas.width, canvas.height);
-                };
-                prevImg.src = frames[frameIndex - 1];
-            } else {
-                onionSkinCtx.clearRect(0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+            // Renderiza el fotograma anterior para el Papel Cebolla
+            if (onionSkinActive && frameIndex > 0) {
+                const prevFrameImage = await renderFrameToImage(frameIndex - 1);
+                if (prevFrameImage) {
+                    const prevImg = new Image();
+                    prevImg.onload = () => {
+                        onionSkinCtx.drawImage(prevImg, 0, 0, onionSkinCanvas.width, onionSkinCanvas.height);
+                    };
+                    prevImg.src = prevFrameImage;
+                }
             }
 
-            // Cargar fotograma actual
-            if (frames[frameIndex]) {
-                const currentImg = new Image();
-                currentImg.onload = () => {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
-                    // Limpiar el historial y guardar el estado inicial del nuevo frame
-                    history = [canvas.toDataURL()];
-                    historyIndex = 0;
-                };
-                currentImg.src = frames[frameIndex];
-            } else {
-                // frame vacío -> lienzo limpio
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                history = [canvas.toDataURL()];
-                historyIndex = 0;
-            }
+            // Renderiza todas las capas del fotograma actual al canvas principal
+            redrawCanvasLayers(true);
+            
+            // Limpiar historial y guardar el estado de la capa activa
+            history = [canvas.toDataURL()];
+            historyIndex = 0;
 
             updateFramePreviews();
+            renderLayers(); // Actualizar la vista del panel de capas
+        }
+
+        function redrawCanvasLayers(fullRender = true) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const layersToDraw = frames[activeFrame].layers;
+
+            if (fullRender) {
+                layersToDraw.forEach(layer => {
+                    if (layer.visible && layer.data) {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        };
+                        img.src = layer.data;
+                    }
+                });
+            } else {
+                // Renderizar solo la capa activa para que las otras se vean como parte del fondo
+                layersToDraw.forEach((layer, index) => {
+                    if (layer.visible && layer.data) {
+                        const img = new Image();
+                        img.onload = () => {
+                            // Si no es la capa activa, dibujarla directamente
+                            if (index !== activeLayer) {
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            }
+                        };
+                        img.src = layer.data;
+                    }
+                });
+            }
         }
 
         function addFrame() {
             saveFrame();
-            // Si el fotograma activo tiene contenido, crea una copia en el siguiente fotograma
-            const nextFrameData = frames[activeFrame] || null;
-            frames.splice(activeFrame + 1, 0, nextFrameData);
+            const newFrame = JSON.parse(JSON.stringify(frames[activeFrame] || { layers: [{ id: Date.now(), visible: true, data: '' }] }));
+            frames.splice(activeFrame + 1, 0, newFrame);
             activeFrame++;
             loadFrame(activeFrame);
             updateFramePreviews();
             saveToLocalStorage();
         }
 
-        function updateFramePreviews() {
-            const existingFrames = framesContainer.querySelectorAll('.frame-preview');
+        async function updateFramePreviews() {
+            const previews = await Promise.all(frames.map(async (frame, index) => {
+                const imgData = await renderFrameToImage(index);
+                return { imgData, index };
+            }));
+
+            framesContainer.innerHTML = '';
+            previews.forEach(({ imgData, index }) => {
+                createFramePreview(index, imgData);
+            });
             
-            // Si la cantidad de frames cambió, recrear todo
-            if (existingFrames.length !== frames.length) {
-                framesContainer.innerHTML = '';
-                frames.forEach((frameData, index) => {
-                    createFramePreview(index, frameData);
-                });
-            } else {
-                // Solo actualizar las miniaturas que necesiten actualización
-                frames.forEach((frameData, index) => {
-                    const frameEl = existingFrames[index];
-                    if (frameEl) {
-                        // Actualizar imagen de fondo
-                        frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
-                        // Actualizar clase activa
-                        frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
-                    }
-                });
-            }
-            
-            // Desplazar la línea de tiempo para mostrar el fotograma activo
             const activeFrameEl = framesContainer.querySelector('.frame-preview.active');
             if (activeFrameEl) {
                 framesContainer.scrollLeft = activeFrameEl.offsetLeft - (framesContainer.offsetWidth / 2) + (activeFrameEl.offsetWidth / 2);
@@ -1499,25 +1516,18 @@
             frameEl.dataset.frameIndex = index;
             frameEl.innerHTML = `<span class="frame-number">${index + 1}</span>`;
             
-            // Click event for frame selection
             frameEl.addEventListener('click', (e) => {
-                if (isLongPress) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
                 if (isPlaying) {
                     pauseAnimation();
                 }
                 loadFrame(index);
             });
 
-            // Context menu on long press/right click
             let longPressTimer;
             let isLongPress = false;
 
             frameEl.addEventListener('mousedown', (e) => {
-                if (e.button === 2) { // Right click
+                if (e.button === 2) {
                     e.preventDefault();
                     showFrameContextMenu(e, index);
                     return;
@@ -1560,7 +1570,6 @@
                 setTimeout(() => { isLongPress = false; }, 100);
             });
 
-            // Drag and drop events
             frameEl.addEventListener('dragstart', (e) => {
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', index);
@@ -1609,16 +1618,20 @@
             addFrame();
         });
 
-        function playAnimation() {
+        async function playAnimation() {
             if (isPlaying) return;
             if (frames.length === 0) return;
             isPlaying = true;
             playBtn.innerHTML = pauseIcon;
             let currentFrameIndex = activeFrame;
+            
+            // Precargar todas las imágenes para una reproducción fluida
+            const frameImages = await Promise.all(frames.map(frame => renderFrameToImage(frame.layers)));
+
             animationInterval = setInterval(() => {
                 currentFrameIndex = (currentFrameIndex + 1) % frames.length;
                 loadFrame(currentFrameIndex);
-            }, 1000 / fps); // Usa la variable fps
+            }, 1000 / fps);
         }
 
         function pauseAnimation() {
@@ -1635,13 +1648,12 @@
             }
         });
 
-        // Onion Skin Logic
         onionSkinBtn.addEventListener('click', () => {
             onionSkinActive = !onionSkinActive;
             onionSkinBtn.classList.toggle('active', onionSkinActive);
             loadFrame(activeFrame);
         });
-        onionSkinBtn.classList.add('active'); // Mantiene el botón de la capa cebolla activo
+        onionSkinBtn.classList.add('active');
 
         // Layer Panel Logic
         layerBtn.addEventListener('click', () => {
@@ -1654,34 +1666,65 @@
         });
 
         addLayerBtn.addEventListener('click', () => {
-            layers.push({ id: Date.now(), visible: true, data: [] });
-            renderLayers();
+            // Guardar el estado actual de la capa activa antes de cambiar
+            saveFrame();
+
+            // Añadir una nueva capa vacía
+            const newLayer = { id: Date.now(), visible: true, data: '' };
+            frames[activeFrame].layers.splice(activeLayer + 1, 0, newLayer);
+            activeLayer++;
+
+            // Dibuja la capa anterior en el canvas principal
+            redrawCanvasLayers(true);
+            
+            renderLayers(); // Volver a renderizar la lista
         });
+
+        // NUEVO: Función para seleccionar una capa
+        function selectLayer(indexToSelect) {
+            saveFrame(); // Guardar el estado de la capa activa anterior
+            activeLayer = indexToSelect;
+            
+            // Renderizar todas las capas al canvas
+            redrawCanvasLayers(true);
+
+            renderLayers(); // Actualizar el panel de capas para reflejar el cambio
+        }
 
         function renderLayers() {
             layersList.innerHTML = '';
-            layers.forEach((layer, index) => {
+            frames[activeFrame].layers.forEach((layer, index) => {
                 const layerEl = document.createElement('div');
-                layerEl.className = 'layer-item';
+                layerEl.className = `layer-item ${index === activeLayer ? 'active' : ''}`;
                 layerEl.innerHTML = `
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 w-full">
                         <i class="fas fa-grip-vertical text-gray-400 drag-handle"></i>
-                        <span>Capa ${index + 1}</span>
+                        <span class="flex-grow">Capa ${frames[activeFrame].layers.length - index}</span>
+                        <button class="text-gray-500 hover:text-red-500 p-2" onclick="toggleLayerVisibility(${index})">
+                            <i class="fas fa-eye${layer.visible ? '' : '-slash'}"></i>
+                        </button>
+                        <button class="text-gray-500 hover:text-red-500 p-2" onclick="selectLayer(${index})">
+                            <i class="fas fa-hand-pointer"></i>
+                        </button>
                     </div>
-                    <button class="text-gray-500 hover:text-red-500" onclick="toggleLayer(${index})">
-                        <i class="fas fa-eye${layer.visible ? '' : '-slash'}"></i>
-                    </button>
+                    <div class="layer-actions absolute h-full flex items-center justify-end px-4 right-[-100%] rounded-r-md">
+                        <span onclick="deleteLayer(${index})" class="text-white">
+                            <i class="fas fa-trash-alt text-xl"></i>
+                        </span>
+                    </div>
                 `;
                 layerEl.dataset.index = index;
                 layersList.appendChild(layerEl);
 
-                // Swipe logic
                 let startX;
+                let isDragging = false;
                 layerEl.addEventListener('touchstart', (e) => {
                     startX = e.touches[0].clientX;
+                    isDragging = true;
                 });
 
                 layerEl.addEventListener('touchmove', (e) => {
+                    if (!isDragging) return;
                     let currentX = e.touches[0].clientX;
                     let diff = startX - currentX;
                     if (diff > 50) {
@@ -1690,11 +1733,33 @@
                         layerEl.classList.remove('swiped');
                     }
                 });
+
+                layerEl.addEventListener('touchend', () => {
+                    isDragging = false;
+                });
             });
-            setupDragAndDrop();
+            setupLayerDragAndDrop();
         }
 
-        function setupDragAndDrop() {
+        function deleteLayer(indexToDelete) {
+            if (frames[activeFrame].layers.length <= 1) {
+                console.log("No se puede eliminar la última capa.");
+                return;
+            }
+
+            frames[activeFrame].layers.splice(indexToDelete, 1);
+            if (indexToDelete === activeLayer) {
+                activeLayer = Math.min(indexToDelete, frames[activeFrame].layers.length - 1);
+            } else if (indexToDelete < activeLayer) {
+                activeLayer--;
+            }
+
+            renderLayers();
+            redrawCanvasLayers(true);
+            saveFrame();
+        }
+
+        function setupLayerDragAndDrop() {
             const list = document.getElementById('layersList');
             let draggingEl;
 
@@ -1716,36 +1781,31 @@
 
             list.addEventListener('drop', (e) => {
                 e.preventDefault();
-                const newOrder = Array.from(list.children).map(el => layers[el.dataset.index]);
-                layers = newOrder;
+                const newOrder = Array.from(list.children).map(el => frames[activeFrame].layers[el.dataset.index]);
+                frames[activeFrame].layers = newOrder;
                 renderLayers();
+                redrawCanvasLayers(true);
+                saveFrame();
             });
         }
         
-        function toggleLayer(index) {
-            layers[index].visible = !layers[index].visible;
+        function toggleLayerVisibility(index) {
+            frames[activeFrame].layers[index].visible = !frames[activeFrame].layers[index].visible;
             renderLayers();
-            updateCanvasLayers();
-        }
-
-        function updateCanvasLayers() {
-            // Placeholder
-            // Aquí podrías volver a renderizar todas las capas visibles en el canvas principal
-            console.log("Updating canvas layers...");
+            redrawCanvasLayers(true);
+            saveFrame();
         }
 
         // Abrir proyecto existente
         function openProject(index) {
             currentProjectIndex = index;
             const project = projects[index];
-            frames = project.frames && project.frames.length ? project.frames.slice() : [''];
+            frames = project.frames && project.frames.length ? JSON.parse(JSON.stringify(project.frames)) : [{ layers: [{ id: Date.now(), visible: true, data: '' }] }];
             activeFrame = 0;
             
-            // Configurar canvas antes de mostrar la pantalla
             setCanvasSizeToContainer();
             showDesignScreen();
             
-            // Inicializar canvas después de mostrar la pantalla
             setTimeout(() => {
                 initCanvas();
                 loadFrame(activeFrame);
@@ -1753,9 +1813,7 @@
             }, 100);
         }
 
-        // Context menu functionality
         function showFrameContextMenu(event, frameIndex) {
-            // Remove any existing context menu
             const existingMenu = document.querySelector('.frame-context-menu');
             if (existingMenu) {
                 existingMenu.remove();
@@ -1776,7 +1834,6 @@
             if (frameEl) {
                 frameEl.appendChild(menu);
                 
-                // Close menu when clicking elsewhere
                 setTimeout(() => {
                     document.addEventListener('click', function closeMenu(e) {
                         if (!menu.contains(e.target)) {
@@ -1793,11 +1850,10 @@
                 pauseAnimation();
             }
             
-            saveFrame(); // Save current frame
-            const frameData = frames[frameIndex] || '';
-            frames.splice(frameIndex + 1, 0, frameData);
+            saveFrame();
+            const newFrame = JSON.parse(JSON.stringify(frames[frameIndex]));
+            frames.splice(frameIndex + 1, 0, newFrame);
             
-            // Update active frame if needed
             if (frameIndex <= activeFrame) {
                 activeFrame++;
             }
@@ -1805,13 +1861,12 @@
             updateFramePreviews();
             saveToLocalStorage();
             
-            // Remove context menu
             const menu = document.querySelector('.frame-context-menu');
             if (menu) menu.remove();
         }
 
         function deleteFrame(frameIndex) {
-            if (frames.length <= 1) return; // Don't delete if it's the only frame
+            if (frames.length <= 1) return;
             
             if (isPlaying) {
                 pauseAnimation();
@@ -1819,7 +1874,6 @@
             
             frames.splice(frameIndex, 1);
             
-            // Adjust active frame
             if (frameIndex <= activeFrame) {
                 activeFrame = Math.max(0, activeFrame - 1);
             }
@@ -1831,7 +1885,6 @@
             updateFramePreviews();
             saveToLocalStorage();
             
-            // Remove context menu
             const menu = document.querySelector('.frame-context-menu');
             if (menu) menu.remove();
         }
@@ -1846,7 +1899,6 @@
             const draggedFrame = frames.splice(fromIndex, 1)[0];
             frames.splice(toIndex, 0, draggedFrame);
             
-            // Update active frame index
             if (fromIndex === activeFrame) {
                 activeFrame = toIndex;
             } else if (fromIndex < activeFrame && toIndex >= activeFrame) {
@@ -1859,7 +1911,6 @@
             saveToLocalStorage();
         }
 
-        // LocalStorage functionality
         function saveToLocalStorage() {
             saveCurrentProject();
             localStorage.setItem('flipaclip_projects', JSON.stringify(projects));
@@ -1876,31 +1927,33 @@
             }
         }
 
-        // Guardar proyecto en array
         function saveCurrentProject() {
             if (currentProjectIndex === null) return;
+            
+            // Guardar el estado actual de la capa activa antes de guardar el proyecto
+            frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
+
             projects[currentProjectIndex].frames = frames.slice();
             
-            // Update project thumbnail with first frame
-            if (frames.length > 0 && frames[0]) {
-                projects[currentProjectIndex].img = frames[0];
-            }
+            // Re-renderizar la miniatura del primer fotograma
+            renderFrameToImage(0).then(imgData => {
+                if (imgData) {
+                    projects[currentProjectIndex].img = imgData;
+                }
+            });
             
-            // Update time based on frame count and fps
             const totalSeconds = Math.ceil(frames.length / fps);
             const minutes = Math.floor(totalSeconds / 60);
             const seconds = totalSeconds % 60;
             projects[currentProjectIndex].time = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
-        // Initial rendering
         window.onload = () => {
             loadFromLocalStorage();
             renderProjects();
             setActiveTab(proyectosTab);
-            // NOTA: no llamar resizeCanvas() aquí porque el designScreen suele estar oculto;
-            // initCanvas / setCanvasSizeToContainer se llaman cuando se abre el editor (openProject / showDesignScreen)
         };
     </script>
 </body>
 </html>
+
