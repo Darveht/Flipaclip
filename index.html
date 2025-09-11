@@ -76,7 +76,7 @@
             height: auto;
         }
 
-        #drawingCanvas, #onionSkinCanvas, #selectionCanvas, #boneCanvas {
+        #drawingCanvas, #onionSkinCanvas, #selectionCanvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -105,12 +105,6 @@
             border: none;
             z-index: 2;
             background-color: transparent;
-        }
-
-        #boneCanvas {
-            z-index: 4; /* Higher than drawingCanvas */
-            pointer-events: auto; /* Allow interaction with bones */
-            border: none;
         }
 
         .frame-preview {
@@ -475,10 +469,6 @@
                 <button id="addFrameBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full">
                     <i class="fas fa-plus"></i>
                 </button>
-                <!-- Botón para Sistema de Huesos Avanzado -->
-                <button id="boneRiggingBtn" class="sidebar-tool" data-tool="boneRigging">
-                    <i class="fas fa-bone text-xl"></i>
-                </button>
             </div>
         </div>
 
@@ -537,9 +527,8 @@
         <div class="flex-grow flex justify-center items-center transition-all duration-300 px-2 pt-4 pb-4" id="drawingArea" style="width:100%; min-height: calc(100vh - 280px);">
             <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
-                <canvas id="selectionCanvas"></canvas>
-                <canvas id="boneCanvas"></canvas> <!-- Canvas para el sistema de huesos -->
                 <canvas id="drawingCanvas"></canvas>
+                <canvas id="selectionCanvas"></canvas>
             </div>
         </div>
 
@@ -605,9 +594,8 @@
         const peliculasContent = document.getElementById('peliculasContent');
         const proyectosTab = document.getElementById('proyectosTab');
         const peliculasTab = document.getElementById('peliculasTab');
-        const boneRiggingBtn = document.getElementById('boneRiggingBtn'); // Botón para el sistema de huesos
 
-        // Canvas Elements
+        // Drawing and Animation Elements
         const canvasWrapper = document.getElementById('canvasWrapper') || document.querySelector('.canvas-container');
         const canvasContainer = canvasWrapper; // alias
         const canvas = document.getElementById('drawingCanvas');
@@ -616,9 +604,6 @@
         const onionSkinCtx = onionSkinCanvas.getContext('2d');
         const selectionCanvas = document.getElementById('selectionCanvas');
         const selectionCtx = selectionCanvas.getContext('2d');
-        const boneCanvas = document.getElementById('boneCanvas'); // Canvas para el sistema de huesos
-        const boneCtx = boneCanvas.getContext('2d');
-
         const toolSidebar = document.getElementById('toolSidebar');
         const toggleToolbarBtn = document.getElementById('toggleToolbarBtn');
         const drawingArea = document.getElementById('drawingArea');
@@ -678,16 +663,6 @@
         let layers = [{ id: 1, visible: true, data: '' }];
         let activeLayer = 0;
 
-        // Variables para el sistema de huesos
-        let bones = []; // Array para almacenar los huesos del fotograma actual
-        let activeBone = null;
-        let isDraggingBone = false;
-        let isRotatingBone = false;
-        let isScalingBone = false;
-        let boneDragOffset = { x: 0, y: 0 };
-        let boneRotationOffset = 0;
-        let boneScaleOffset = 1;
-
         // Configuration
         let currentColor = '#000000';
         let currentSize = 5;
@@ -708,7 +683,7 @@
                 const canvasWidth = Math.min(window.innerWidth * 0.9, 600);
                 const canvasHeight = canvasWidth / (16/9);
 
-                [canvas, onionSkinCanvas, selectionCanvas, boneCanvas].forEach(c => {
+                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
                     c.width = canvasWidth;
                     c.height = canvasHeight;
                     c.style.width = canvasWidth + 'px';
@@ -718,7 +693,7 @@
                 const canvasWidth = containerRect.width;
                 const canvasHeight = containerRect.height;
 
-                [canvas, onionSkinCanvas, selectionCanvas, boneCanvas].forEach(c => {
+                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
                     c.width = canvasWidth;
                     c.height = canvasHeight;
                     c.style.width = canvasWidth + 'px';
@@ -733,7 +708,6 @@
             ctx.globalCompositeOperation = 'source-over';
 
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
-            boneCtx.clearRect(0, 0, boneCanvas.width, boneCanvas.height);
         }
 
         function ensureCanvasReady() {
@@ -746,7 +720,6 @@
                     }
                 }
                 redrawCanvas();
-                renderBones(); // Renderizar huesos cuando el canvas esté listo
             });
         }
 
@@ -794,49 +767,6 @@
                 activeLayer = 0;
             }
         }
-
-        // Función para renderizar los huesos en el canvas de huesos
-        function renderBones() {
-            boneCtx.clearRect(0, 0, boneCanvas.width, boneCanvas.height);
-            if (!bones || bones.length === 0) return;
-
-            // Dibujar cada hueso
-            bones.forEach((bone, index) => {
-                boneCtx.save();
-                boneCtx.translate(bone.x, bone.y);
-                boneCtx.rotate(bone.rotation * Math.PI / 180); // Rotar el contexto
-
-                // Dibujar la línea del hueso
-                boneCtx.beginPath();
-                boneCtx.moveTo(0, 0);
-                boneCtx.lineTo(bone.length, 0);
-                boneCtx.strokeStyle = bone.color || '#007bff';
-                boneCtx.lineWidth = bone.thickness || 3;
-                boneCtx.stroke();
-
-                // Dibujar el punto de control (círculo)
-                boneCtx.beginPath();
-                boneCtx.arc(0, 0, 8, 0, Math.PI * 2);
-                boneCtx.fillStyle = index === activeBone ? '#ff0000' : '#ffffff';
-                boneCtx.fill();
-                boneCtx.lineWidth = 1;
-                boneCtx.strokeStyle = '#000';
-                boneCtx.stroke();
-
-                // Dibujar la línea de rotación (opcional, para visualización)
-                if (bone.rotation !== 0) {
-                    boneCtx.beginPath();
-                    boneCtx.moveTo(0, 0);
-                    boneCtx.lineTo(bone.length * 0.8, 0); // Línea más corta para indicar rotación
-                    boneCtx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
-                    boneCtx.lineWidth = 2;
-                    boneCtx.stroke();
-                }
-
-                boneCtx.restore();
-            });
-        }
-
 
         function showHomeScreen() {
             homeScreen.classList.remove('hidden');
@@ -986,9 +916,9 @@
         function draw(e) {
             if (!isDrawing) return;
 
-            const coords = getCanvasCoordinates(e);
-            if (!coords) return;
-            const { x, y } = coords;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
             // Grabar path para animación
             if (isRecordingPath && currentTool === 'brush') {
@@ -1328,23 +1258,10 @@
             currentTool = tool;
             sidebarTools.forEach(btn => btn.classList.remove('active'));
 
-            // Reset selection and related UI elements
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
             deleteSelectionBtn.classList.add('hidden');
             selectedImageData = null;
             lassoPoints = [];
-            isMoving = false;
-
-            // Bone rigging tool specific logic
-            if (tool === 'boneRigging') {
-                boneRiggingBtn.classList.add('active');
-                canvas.style.cursor = 'crosshair'; // Or a specific bone cursor
-                boneCanvas.style.cursor = 'crosshair'; // Ensure bone cursor is visible
-                // Potentially show bone-specific controls here
-            } else {
-                boneRiggingBtn.classList.remove('active');
-                // Reset bone tool specific states if necessary
-            }
 
             if (tool === 'brush') {
                 brushToolBtn.classList.add('active');
@@ -1364,7 +1281,6 @@
                 ctx.lineWidth = 1;
                 canvas.style.cursor = 'crosshair';
             }
-            renderBones(); // Re-render bones when tool changes to ensure correct layering and cursors
         }
 
         toggleToolbarBtn.addEventListener('click', () => {
@@ -1377,108 +1293,6 @@
                 selectTool(tool.dataset.tool);
             });
         });
-
-        // Bone Rigging Tool Event Listeners
-        boneRiggingBtn.addEventListener('click', () => {
-            selectTool('boneRigging');
-        });
-
-        boneCanvas.addEventListener('mousedown', (e) => {
-            if (currentTool !== 'boneRigging') return;
-            const coords = getCanvasCoordinates(e);
-            if (!coords) return;
-
-            const { x, y } = coords;
-
-            // Check if clicking on an existing bone's control point
-            let clickedBoneIndex = -1;
-            for (let i = bones.length - 1; i >= 0; i--) {
-                const bone = bones[i];
-                const dx = x - bone.x;
-                const dy = y - bone.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance <= 8) { // Radius of the control point
-                    clickedBoneIndex = i;
-                    break;
-                }
-            }
-
-            if (clickedBoneIndex !== -1) {
-                activeBone = clickedBoneIndex;
-                isDraggingBone = true;
-                boneDragOffset = { x: x - bones[activeBone].x, y: y - bones[activeBone].y };
-
-                // Check for rotation grab handle (e.g., a small circle at the end of the bone)
-                // For simplicity, let's assume rotation is handled by a separate UI element or gesture for now.
-                // This example will focus on moving the bone's origin.
-
-                renderBones();
-            } else {
-                // If not clicking on a bone, create a new bone
-                // You might want a separate tool mode for creating bones
-                // For now, let's assume clicking creates a new bone from the click point
-                const newBone = {
-                    id: Date.now(),
-                    x: x,
-                    y: y,
-                    length: 50,
-                    rotation: 0, // in degrees
-                    thickness: 3,
-                    color: '#007bff',
-                    parent: null // For skeletal hierarchy
-                };
-                bones.push(newBone);
-                activeBone = bones.length - 1;
-                isDraggingBone = true;
-                boneDragOffset = { x: 0, y: 0 }; // No offset for a new bone
-                renderBones();
-                saveFrame(); // Save the frame with the new bone
-            }
-        });
-
-        boneCanvas.addEventListener('mousemove', (e) => {
-            if (currentTool !== 'boneRigging') return;
-            if (!isDraggingBone && activeBone === null) return; // Only drag if a bone is selected
-
-            const coords = getCanvasCoordinates(e);
-            if (!coords) return;
-            const { x, y } = coords;
-
-            if (isDraggingBone && activeBone !== null) {
-                bones[activeBone].x = x - boneDragOffset.x;
-                bones[activeBone].y = y - boneDragOffset.y;
-                renderBones();
-            }
-            // Add logic for rotation and scaling if implemented
-        });
-
-        boneCanvas.addEventListener('mouseup', (e) => {
-            if (currentTool !== 'boneRigging') return;
-            isDraggingBone = false;
-            // Potentially finalize rotation/scaling if implemented
-            saveFrame(); // Save frame changes related to bones
-        });
-
-        boneCanvas.addEventListener('mouseleave', () => {
-            // Optional: Reset dragging state if mouse leaves the canvas
-            // isDraggingBone = false;
-        });
-
-        // Placeholder function for bone manipulation logic
-        function manipulateBone(bone, deltaX, deltaY, type) {
-            // 'move', 'rotate', 'scale'
-            if (type === 'move') {
-                bone.x += deltaX;
-                bone.y += deltaY;
-            } else if (type === 'rotate') {
-                // Rotation logic would be more complex, involving angles and possibly a reference point
-            } else if (type === 'scale') {
-                // Scaling logic
-            }
-            renderBones();
-        }
-
 
         currentColorDisplay.addEventListener('click', () => {
             colorPicker.click();
@@ -1603,15 +1417,15 @@
         }
 
         // Dibuja todas las capas de un fotograma en un canvas temporal
-        async function renderFrameToImage(frameIndex) {
-            if (!frames[frameIndex]) return null;
+        async function renderFrameToImage(frameLayers) {
+            if (!frameLayers) return null;
 
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
             const tempCtx = tempCanvas.getContext('2d');
 
-            const layersToDraw = frames[frameIndex].layers.filter(layer => layer.visible);
+            const layersToDraw = frameLayers.filter(layer => layer.visible);
 
             for (const layer of layersToDraw) {
                 if (layer.data) {
@@ -1641,12 +1455,9 @@
                         ctx.drawImage(img, 0, 0);
                         ctx.globalAlpha = 1;
 
-                        // Update onion skin and bones after loading
-                        if (onionSkinActive) {
-                            // Ensure onion skin is redrawn if active
-                        }
-                        if (currentTool === 'boneRigging') {
-                            renderBones(); // Re-render bones for the current frame
+                        // Actualizar onion skin mejorado después de cargar
+                        if (enhancedOnionSkin) {
+                            enhancedOnionSkinning();
                         }
                     };
                     img.src = layer.data;
@@ -1700,7 +1511,7 @@
 
         async function updateFramePreviews() {
             const previews = await Promise.all(frames.map(async (frame, index) => {
-                const imgData = await renderFrameToImage(index); // Pass index to renderFrameToImage
+                const imgData = await renderFrameToImage(frame.layers);
                 return { imgData, index };
             }));
 
@@ -1717,7 +1528,7 @@
 
         function createFramePreview(index, frameData) {
             const frameEl = document.createElement('div');
-            frameEl.className = `frame-preview flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
+            frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
             frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
             frameEl.style.backgroundSize = 'contain';
             frameEl.style.backgroundPosition = 'center';
@@ -1975,7 +1786,6 @@
 
             list.addEventListener('dragstart', (e) => {
                 draggingEl = e.target.closest('.layer-item');
-                if (!draggingEl) return; // Exit if the target is not a layer item
                 e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', draggingEl.dataset.index);
             });
@@ -2021,9 +1831,6 @@
                 initCanvas();
                 loadFrame(activeFrame);
                 updateFramePreviews();
-                // Initialize bones for the current frame when opening a project
-                bones = frames[activeFrame].bones || [];
-                renderBones();
             }, 100);
         }
 
@@ -2144,9 +1951,8 @@
         function saveCurrentProject() {
             if (currentProjectIndex === null) return;
 
-            // Guardar el estado de la capa activa y los huesos del fotograma actual
+            // Guardar el estado actual de la capa activa antes de guardar el proyecto
             frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-            frames[activeFrame].bones = JSON.parse(JSON.stringify(bones)); // Guardar huesos
 
             projects[currentProjectIndex].frames = frames.slice();
 
