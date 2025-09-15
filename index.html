@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FlipaClip</title>
+    <title>Zenimation</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,7 +89,7 @@
 
         #drawingCanvas {
             z-index: 3;
-            background-color: white;
+            background-color: transparent;
         }
 
         #onionSkinCanvas {
@@ -97,7 +97,7 @@
             pointer-events: none;
             border: none;
             z-index: 1;
-            background-color: transparent;
+            background-color: white;
         }
 
         #selectionCanvas {
@@ -372,6 +372,18 @@
             </div>
         </div>
     </div>
+    
+    <!-- Modal de confirmación para borrar proyectos -->
+    <div id="deleteProjectsModal" class="fixed inset-0 hidden modal">
+        <div class="modal-content text-center">
+            <h2 class="text-2xl font-bold mb-4">¿Estás seguro?</h2>
+            <p class="text-gray-600 mb-6">Esta acción borrará todos tus proyectos de forma permanente.</p>
+            <div class="flex justify-center space-x-4">
+                <button id="cancelDeleteButton" class="px-6 py-2 bg-gray-300 text-gray-800 rounded-full font-semibold">Cancelar</button>
+                <button id="confirmDeleteButton" class="px-6 py-2 bg-red-500 text-white rounded-full font-semibold">Borrar todo</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Pantalla de inicio -->
     <div id="homeScreen" class="w-full h-full flex flex-col">
@@ -382,11 +394,10 @@
                     <i class="fas fa-bars text-xl text-gray-600 cursor-pointer"></i>
                 </div>
                 <div class="flex-grow flex justify-center">
-                    <span class="text-2xl font-bold text-gray-800 tracking-wider">FlipaClip</span>
+                    <span class="text-2xl font-bold text-gray-800 tracking-wider">Zenimation</span>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <i class="fas fa-search text-xl text-gray-600 cursor-pointer"></i>
-                    <i class="fas fa-ellipsis-v text-xl text-gray-600 cursor-pointer"></i>
+                    <button id="clearAllProjectsBtn" class="text-sm px-3 py-1 bg-gray-200 text-gray-700 rounded-full font-semibold">Borrar Proyectos</button>
                 </div>
             </div>
             <!-- Pestañas -->
@@ -403,7 +414,7 @@
         </div>
 
         <!-- Contenido de la página -->
-        <main class="flex-grow p-4 mt-36 w-full max-w-2xl overflow-y-auto pb-24">
+        <main class="flex-grow p-4 mt-36 w-full max-w-2xl overflow-y-auto pb-24 mx-auto">
             <div id="proyectosContent" class="grid grid-cols-2 gap-4">
                 <!-- Proyectos se renderizarán aquí -->
             </div>
@@ -441,7 +452,7 @@
         </div>
     </div>
 
-    <!-- Pantalla de diseño de FlipaClip -->
+    <!-- Pantalla de diseño de Zenimation -->
     <div id="designScreen" class="hidden w-full h-full flex flex-col items-center">
         <!-- Navbar Superior de diseño -->
         <div class="fixed top-0 left-0 w-full bg-white shadow-md z-50 rounded-b-xl">
@@ -594,6 +605,10 @@
         const peliculasContent = document.getElementById('peliculasContent');
         const proyectosTab = document.getElementById('proyectosTab');
         const peliculasTab = document.getElementById('peliculasTab');
+        const clearAllProjectsBtn = document.getElementById('clearAllProjectsBtn');
+        const deleteProjectsModal = document.getElementById('deleteProjectsModal');
+        const cancelDeleteButton = document.getElementById('cancelDeleteButton');
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
 
         // Drawing and Animation Elements
         const canvasWrapper = document.getElementById('canvasWrapper') || document.querySelector('.canvas-container');
@@ -660,7 +675,6 @@
         let pathRecording = [];
 
         // El estado de capas se mueve dentro de cada fotograma
-        let layers = [{ id: 1, visible: true, data: '' }];
         let activeLayer = 0;
 
         // Configuration
@@ -678,52 +692,22 @@
 
         function setCanvasSizeToContainer() {
             const containerRect = canvasContainer.getBoundingClientRect();
+            const canvasWidth = containerRect.width > 0 ? containerRect.width : Math.min(window.innerWidth * 0.9, 600);
+            const canvasHeight = containerRect.height > 0 ? containerRect.height : canvasWidth / (16 / 9);
 
-            if (containerRect.width === 0 || containerRect.height === 0) {
-                const canvasWidth = Math.min(window.innerWidth * 0.9, 600);
-                const canvasHeight = canvasWidth / (16/9);
-
-                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
-                    c.width = canvasWidth;
-                    c.height = canvasHeight;
-                    c.style.width = canvasWidth + 'px';
-                    c.style.height = canvasHeight + 'px';
-                });
-            } else {
-                const canvasWidth = containerRect.width;
-                const canvasHeight = containerRect.height;
-
-                [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
-                    c.width = canvasWidth;
-                    c.height = canvasHeight;
-                    c.style.width = canvasWidth + 'px';
-                    c.style.height = canvasHeight + 'px';
-                });
-            }
+            [canvas, onionSkinCanvas, selectionCanvas].forEach(c => {
+                c.width = canvasWidth;
+                c.height = canvasHeight;
+            });
 
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = currentColor;
             ctx.lineWidth = currentSize;
             ctx.globalCompositeOperation = 'source-over';
-
-            selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
         }
 
-        function ensureCanvasReady() {
-            setCanvasSizeToContainer();
-            requestAnimationFrame(() => {
-                if (!designScreen.classList.contains('hidden')) {
-                    const rect = canvasContainer.getBoundingClientRect();
-                    if (rect.width > 0 && rect.height > 0) {
-                        setCanvasSizeToContainer();
-                    }
-                }
-                redrawCanvas();
-            });
-        }
-
-        function redrawCanvas() {
+        async function redrawCanvas() {
             const canvasWidth = canvas.width;
             const canvasHeight = canvas.height;
 
@@ -734,38 +718,45 @@
             // Redibujar Onion Skin (Papel Cebolla)
             if (onionSkinActive && activeFrame > 0 && frames[activeFrame - 1]) {
                 const prevFrameLayers = frames[activeFrame - 1].layers;
-                prevFrameLayers.forEach(layer => {
+                for (const layer of prevFrameLayers) {
                     if (layer.visible && layer.data) {
                         const img = new Image();
-                        img.onload = () => {
-                            onionSkinCtx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-                        };
                         img.src = layer.data;
+                        await new Promise(resolve => img.onload = resolve);
+                        onionSkinCtx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
                     }
-                });
+                }
             }
 
             // Redibujar el fotograma actual, capa por capa
             if (frames[activeFrame] && frames[activeFrame].layers) {
                 const currentFrameLayers = frames[activeFrame].layers;
-                currentFrameLayers.forEach((layer, index) => {
+                for (let i = 0; i < currentFrameLayers.length; i++) {
+                    const layer = currentFrameLayers[i];
                     if (layer.visible && layer.data) {
                         const img = new Image();
-                        img.onload = () => {
-                            // Si es la capa activa, dibujamos en el canvas principal
-                            if (index === activeLayer) {
-                                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-                            }
-                        };
                         img.src = layer.data;
+                        await new Promise(resolve => img.onload = resolve);
+                        ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
                     }
-                });
-            } else {
-                 // Si el fotograma no existe, creamos el fotograma y la capa inicial
-                frames[activeFrame] = { layers: [{ id: Date.now(), visible: true, data: '' }] };
-                layers = frames[activeFrame].layers;
-                activeLayer = 0;
+                }
             }
+        }
+        
+        // Función para guardar el estado del canvas en la capa activa
+        function saveActiveLayer() {
+            if (frames[activeFrame] && frames[activeFrame].layers[activeLayer]) {
+                frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
+            }
+        }
+        
+        // Función para cargar la capa activa en el canvas y redibujar todo
+        async function loadActiveLayer() {
+            // Guardar el estado actual del canvas en la capa activa antes de cambiar
+            saveActiveLayer();
+
+            // Renderizar todas las capas
+            await redrawCanvas();
         }
 
         function showHomeScreen() {
@@ -777,29 +768,41 @@
             homeScreen.classList.add('hidden');
             designScreen.classList.remove('hidden');
             setTimeout(() => {
-                ensureCanvasReady();
+                setCanvasSizeToContainer();
+                loadActiveLayer();
             }, 50);
         }
 
         function renderProjects() {
             proyectosContent.innerHTML = '';
+            if (projects.length === 0) {
+                proyectosContent.innerHTML = '<p class="col-span-2 text-center text-gray-500 mt-10">¡No tienes proyectos! Pulsa el botón <i class="fas fa-plus mx-1"></i> para empezar.</p>';
+            }
             projects.forEach((project, idx) => {
                 const projectCard = document.createElement('div');
                 projectCard.className = 'bg-white rounded-xl shadow-lg overflow-hidden relative cursor-pointer';
+                
+                const previewImg = document.createElement('div');
+                previewImg.className = 'w-full h-48 bg-gray-200 flex items-center justify-center p-2';
+                previewImg.style.backgroundImage = project.img ? `url(${project.img})` : 'none';
+                previewImg.style.backgroundSize = 'cover';
+                previewImg.style.backgroundPosition = 'center';
+                previewImg.style.backgroundRepeat = 'no-repeat';
+                
+                if (!project.img) {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'text-center text-gray-400 text-sm p-4';
+                    placeholder.textContent = 'Sin vista previa';
+                    previewImg.appendChild(placeholder);
+                }
+
                 projectCard.innerHTML = `
-                    <div class="w-full h-48 bg-gray-200 flex items-center justify-center p-2">
-                        <img src="${project.img}" alt="${project.name}" class="rounded-lg object-cover w-full h-full">
-                    </div>
                     <div class="p-2 text-center">
                         <p class="text-sm font-semibold text-gray-700">${project.name}</p>
                         <p class="text-xs text-gray-500">${project.time} | ${project.fps}</p>
                     </div>
-                    <div class="absolute top-2 right-2 flex items-center bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded-full">
-                        <span class="mr-1">${project.time}</span>
-                        <span class="mr-1">|</span>
-                        <span>${project.fps}</span>
-                    </div>
                 `;
+                projectCard.insertBefore(previewImg, projectCard.firstChild);
                 projectCard.addEventListener('click', () => openProject(idx));
                 proyectosContent.appendChild(projectCard);
             });
@@ -839,13 +842,13 @@
         });
 
         createButton.addEventListener('click', () => {
-            const newProjectName = `nuevo proyecto ${projects.length + 1}`;
+            const newProjectName = `proyecto ${projects.length + 1}`;
             // Crear un nuevo proyecto con un fotograma y una capa inicial
             projects.push({
                 name: newProjectName,
                 time: '00:00',
                 fps: '12 fps',
-                img: `https://placehold.co/200x200/cccccc/ffffff?text=${encodeURIComponent(newProjectName)}`,
+                img: '',
                 frames: [{ layers: [{ id: Date.now(), visible: true, data: '' }] }]
             });
             saveToLocalStorage();
@@ -861,29 +864,30 @@
             }
             saveCurrentProject();
         });
+        
+        clearAllProjectsBtn.addEventListener('click', () => {
+            deleteProjectsModal.classList.remove('hidden');
+        });
 
-        // Canvas Drawing Logic
-        function initCanvas() {
-            setCanvasSizeToContainer();
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = currentColor;
-            ctx.lineWidth = currentSize;
+        cancelDeleteButton.addEventListener('click', () => {
+            deleteProjectsModal.classList.add('hidden');
+        });
 
-            history = [canvas.toDataURL()];
-            historyIndex = 0;
-        }
-
-        function resizeCanvas() {
-            setCanvasSizeToContainer();
-        }
+        confirmDeleteButton.addEventListener('click', () => {
+            projects = [];
+            localStorage.removeItem('zenimation_projects');
+            localStorage.removeItem('flipaclip_projects');
+            renderProjects();
+            deleteProjectsModal.classList.add('hidden');
+        });
 
         let resizeTimeout;
         window.addEventListener('resize', () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 if (!designScreen.classList.contains('hidden')) {
-                    ensureCanvasReady();
+                    setCanvasSizeToContainer();
+                    loadActiveLayer();
                 } else {
                     setCanvasSizeToContainer();
                 }
@@ -893,13 +897,13 @@
         window.addEventListener('orientationchange', () => {
             setTimeout(() => {
                 if (!designScreen.classList.contains('hidden')) {
-                    ensureCanvasReady();
+                    setCanvasSizeToContainer();
+                    loadActiveLayer();
                 } else {
                     setCanvasSizeToContainer();
                 }
             }, 200);
         });
-
 
         function getCanvasCoordinates(e) {
             const rect = canvas.getBoundingClientRect();
@@ -916,52 +920,20 @@
         function draw(e) {
             if (!isDrawing) return;
 
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            // Grabar path para animación
-            if (isRecordingPath && currentTool === 'brush') {
-                pathRecording.push({x, y, timestamp: Date.now()});
-            }
+            const coords = getCanvasCoordinates(e);
+            if (!coords) return;
+            const { x, y } = coords;
 
             if (currentTool === 'eraser') {
                 ctx.globalCompositeOperation = 'destination-out';
-                ctx.beginPath();
-                ctx.arc(x, y, currentSize, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.stroke();
+            } else {
                 ctx.globalCompositeOperation = 'source-over';
-            } else if (currentTool === 'brush') {
-                ctx.globalCompositeOperation = 'source-over';
-
-                // Aplicar motion blur si está activado
-                if (motionBlurEnabled) {
-                    ctx.filter = `blur(${motionBlurIntensity}px)`;
-                }
-
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.stroke();
-
-                // Restaurar filtro
-                ctx.filter = 'none';
-            } else if (currentTool === 'lasso') {
-                selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
-                selectionCtx.strokeStyle = '#00f';
-                selectionCtx.setLineDash([5, 5]);
-                selectionCtx.lineWidth = 1;
-                selectionCtx.beginPath();
-                selectionCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
-                lassoPoints.forEach(p => selectionCtx.lineTo(p.x, p.y));
-                selectionCtx.lineTo(x, y);
-                selectionCtx.stroke();
-                lassoPoints.push({x, y});
             }
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
 
             [lastX, lastY] = [x, y];
         }
@@ -1028,12 +1000,26 @@
         }
 
         function startDrawing(e) {
-            isDrawing = true;
             const coords = getCanvasCoordinates(e);
             if (!coords) return;
+            const { x, y } = coords;
 
-            const {x, y} = coords;
+            if (currentTool === 'paintBucket') {
+                if (historyIndex < history.length - 1) {
+                    history = history.slice(0, historyIndex + 1);
+                }
+                history.push(canvas.toDataURL());
+                historyIndex++;
+                floodFill(x, y, currentColor);
+                saveActiveLayer();
+                updateFramePreviews();
+                return;
+            }
+            
+            isDrawing = true;
             [lastX, lastY] = [x, y];
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
 
             if (currentTool === 'lasso') {
                 lassoPoints = [{x, y}];
@@ -1049,17 +1035,18 @@
         }
 
         function stopDrawing() {
+            if (!isDrawing) return;
             isDrawing = false;
-
+            
             if (currentTool === 'lasso' && lassoPoints.length > 2) {
                 selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
                 selectionCtx.setLineDash([]);
-
+                
                 const tempCanvas = document.createElement('canvas');
                 tempCanvas.width = canvas.width;
                 tempCanvas.height = canvas.height;
                 const tempCtx = tempCanvas.getContext('2d');
-
+                
                 tempCtx.beginPath();
                 tempCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
                 lassoPoints.forEach(p => tempCtx.lineTo(p.x, p.y));
@@ -1073,7 +1060,7 @@
                 const maxY = Math.max(...lassoPoints.map(p => p.y));
                 const width = Math.max(1, maxX - minX);
                 const height = Math.max(1, maxY - minY);
-
+                
                 selectedImageData = tempCtx.getImageData(minX, minY, width, height);
 
                 ctx.globalCompositeOperation = 'destination-out';
@@ -1098,8 +1085,8 @@
                 selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
                 deleteSelectionBtn.classList.add('hidden');
             }
-
-            saveFrame();
+            
+            saveActiveLayer();
             updateFramePreviews();
             saveToLocalStorage();
         }
@@ -1107,35 +1094,16 @@
         function handleLassoMove(e) {
             const coords = getCanvasCoordinates(e);
             if (!coords) return;
-
-            const {x, y} = coords;
+            const { x, y } = coords;
             const dx = x - selectionStartOffset.x;
             const dy = y - selectionStartOffset.y;
-
-            // Dibuja todas las capas excepto la capa activa en el canvas principal
-            redrawCanvasLayers(false);
-
-            // Dibuja la capa activa sin la selección en un canvas temporal
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Clear and re-render only the active layer
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             const activeLayerDataURL = frames[activeFrame].layers[activeLayer].data;
             const img = new Image();
             img.onload = () => {
-                tempCtx.drawImage(img, 0, 0);
-                tempCtx.globalCompositeOperation = 'destination-out';
-                tempCtx.beginPath();
-                tempCtx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
-                lassoPoints.forEach(p => tempCtx.lineTo(p.x, p.y));
-                tempCtx.closePath();
-                tempCtx.fill();
-                tempCtx.globalCompositeOperation = 'source-over';
-
-                // Dibuja el resultado en el canvas principal
-                ctx.drawImage(tempCanvas, 0, 0);
-
-                // Dibuja la selección movida en el canvas principal
+                ctx.drawImage(img, 0, 0);
                 if (selectedImageData) {
                     ctx.putImageData(selectedImageData, dx + Math.min(...lassoPoints.map(p => p.x)), dy + Math.min(...lassoPoints.map(p => p.y)));
                 }
@@ -1145,39 +1113,13 @@
 
         function handleLassoMoveEnd(e) {
             isMoving = false;
-            // Dibuja la capa activa final en un canvas temporal
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(canvas, 0, 0);
-
-            // Actualiza la capa activa con la nueva imagen
-            frames[activeFrame].layers[activeLayer].data = tempCanvas.toDataURL();
-
-            saveFrame();
+            saveActiveLayer();
             updateFramePreviews();
             history.push(canvas.toDataURL());
             historyIndex++;
         }
 
         canvas.addEventListener('mousedown', (e) => {
-            if (currentTool === 'paintBucket') {
-                const coords = getCanvasCoordinates(e);
-                if (coords) {
-                    if (historyIndex < history.length - 1) {
-                        history = history.slice(0, historyIndex + 1);
-                    }
-                    history.push(canvas.toDataURL());
-                    historyIndex++;
-
-                    floodFill(coords.x, coords.y, currentColor);
-                    saveFrame();
-                    updateFramePreviews();
-                }
-                return;
-            }
-
             if (currentTool === 'lasso' && selectedImageData) {
                 isMoving = true;
                 const coords = getCanvasCoordinates(e);
@@ -1208,22 +1150,6 @@
 
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            if (currentTool === 'paintBucket') {
-                const coords = getCanvasCoordinates(e);
-                if (coords) {
-                    if (historyIndex < history.length - 1) {
-                        history = history.slice(0, historyIndex + 1);
-                    }
-                    history.push(canvas.toDataURL());
-                    historyIndex++;
-
-                    floodFill(coords.x, coords.y, currentColor);
-                    saveFrame();
-                    updateFramePreviews();
-                }
-                return;
-            }
-
             if (currentTool === 'lasso' && selectedImageData) {
                 isMoving = true;
                 const coords = getCanvasCoordinates(e);
@@ -1331,29 +1257,25 @@
             }
         });
 
-        deleteSelectionBtn.addEventListener('click', () => {
+        deleteSelectionBtn.addEventListener('click', async () => {
             if (selectedImageData) {
+                // Clear the selected area from the canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                const backgroundDataURL = frames[activeFrame].layers[activeLayer].data || '';
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0);
-                    ctx.globalCompositeOperation = 'destination-out';
-                    ctx.beginPath();
-                    ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
-                    lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.globalCompositeOperation = 'source-over';
+                // Re-render all layers for the current frame
+                await redrawCanvas();
+                
+                ctx.globalCompositeOperation = 'destination-out';
+                ctx.beginPath();
+                ctx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+                lassoPoints.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
 
-                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-
-                    saveFrame();
-                    updateFramePreviews();
-                    history.push(canvas.toDataURL());
-                    historyIndex++;
-                };
-                img.src = backgroundDataURL;
+                saveActiveLayer();
+                updateFramePreviews();
+                history.push(canvas.toDataURL());
+                historyIndex++;
 
                 selectedImageData = null;
                 deleteSelectionBtn.classList.add('hidden');
@@ -1361,47 +1283,31 @@
             }
         });
 
-        colorPicker.addEventListener('input', (e) => {
-            currentColor = e.target.value;
-            if (currentTool === 'brush') {
-                ctx.strokeStyle = currentColor;
-            }
-        });
-
-        brushSize.addEventListener('input', (e) => {
-            currentSize = e.target.value;
-            if (currentTool === 'brush') {
-                ctx.lineWidth = currentSize;
-            } else if (currentTool === 'eraser') {
-                ctx.lineWidth = currentSize * 2;
-            }
-        });
-
         // Undo/Redo Logic
-        undoBtn.addEventListener('click', () => {
+        undoBtn.addEventListener('click', async () => {
             if (historyIndex > 0) {
                 historyIndex--;
                 const tempImage = new Image();
-                tempImage.onload = () => {
+                tempImage.onload = async () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
-                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-                    saveFrame();
+                    saveActiveLayer();
+                    await loadActiveLayer();
                     updateFramePreviews();
                 };
                 tempImage.src = history[historyIndex];
             }
         });
 
-        redoBtn.addEventListener('click', () => {
+        redoBtn.addEventListener('click', async () => {
             if (historyIndex < history.length - 1) {
                 historyIndex++;
                 const tempImage = new Image();
-                tempImage.onload = () => {
+                tempImage.onload = async () => {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(tempImage, 0, 0);
-                    frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-                    saveFrame();
+                    saveActiveLayer();
+                    await loadActiveLayer();
                     updateFramePreviews();
                 };
                 tempImage.src = history[historyIndex];
@@ -1409,114 +1315,44 @@
         });
 
         // Animation Logic
-        function saveFrame() {
-            if (currentProjectIndex === null) return;
-            // Guardar el estado de la capa activa en el fotograma actual
-            frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-            projects[currentProjectIndex].frames = frames.slice();
-        }
-
-        // Dibuja todas las capas de un fotograma en un canvas temporal
-        async function renderFrameToImage(frameLayers) {
-            if (!frameLayers) return null;
-
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            const layersToDraw = frameLayers.filter(layer => layer.visible);
-
-            for (const layer of layersToDraw) {
-                if (layer.data) {
-                    const img = new Image();
-                    img.src = layer.data;
-                    await new Promise(resolve => img.onload = resolve);
-                    tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-                }
-            }
-            return tempCanvas.toDataURL();
-        }
-
-        async function loadFrame(frameIndex) {
-            if (!frames[frameIndex]) return;
-
-            activeFrame = frameIndex;
-
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Load all layers for this frame
-            frames[frameIndex].layers.forEach((layer, layerIndex) => {
-                if (layer.visible && layer.data) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.globalAlpha = layer.opacity || 1;
-                        ctx.drawImage(img, 0, 0);
-                        ctx.globalAlpha = 1;
-
-                        // Actualizar onion skin mejorado después de cargar
-                        if (enhancedOnionSkin) {
-                            enhancedOnionSkinning();
-                        }
-                    };
-                    img.src = layer.data;
-                }
-            });
-
-            // Update frame previews highlighting
-            updateFramePreviews();
-        }
-
-        function redrawCanvasLayers(fullRender = true) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const layersToDraw = frames[activeFrame].layers;
-
-            if (fullRender) {
-                layersToDraw.forEach(layer => {
-                    if (layer.visible && layer.data) {
-                        const img = new Image();
-                        img.onload = () => {
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        };
-                        img.src = layer.data;
-                    }
-                });
-            } else {
-                // Renderizar solo la capa activa para que las otras se vean como parte del fondo
-                layersToDraw.forEach((layer, index) => {
-                    if (layer.visible && layer.data) {
-                        const img = new Image();
-                        img.onload = () => {
-                            // Si no es la capa activa, dibujarla directamente
-                            if (index !== activeLayer) {
-                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            }
-                        };
-                        img.src = layer.data;
-                    }
-                });
-            }
-        }
-
         function addFrame() {
-            saveFrame();
+            saveActiveLayer();
             const newFrame = JSON.parse(JSON.stringify(frames[activeFrame] || { layers: [{ id: Date.now(), visible: true, data: '' }] }));
             frames.splice(activeFrame + 1, 0, newFrame);
             activeFrame++;
-            loadFrame(activeFrame);
+            loadActiveLayer();
             updateFramePreviews();
             saveToLocalStorage();
         }
 
         async function updateFramePreviews() {
-            const previews = await Promise.all(frames.map(async (frame, index) => {
-                const imgData = await renderFrameToImage(frame.layers);
-                return { imgData, index };
-            }));
+            const promises = frames.map(frame => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                const layersToDraw = frame.layers.filter(layer => layer.visible);
+                return Promise.all(layersToDraw.map(layer => {
+                    return new Promise(resolve => {
+                        if (layer.data) {
+                            const img = new Image();
+                            img.onload = () => {
+                                tempCtx.drawImage(img, 0, 0);
+                                resolve();
+                            };
+                            img.src = layer.data;
+                        } else {
+                            resolve();
+                        }
+                    });
+                })).then(() => tempCanvas.toDataURL());
+            });
+            
+            const previews = await Promise.all(promises);
 
             framesContainer.innerHTML = '';
-            previews.forEach(({ imgData, index }) => {
+            previews.forEach((imgData, index) => {
                 createFramePreview(index, imgData);
             });
 
@@ -1529,7 +1365,7 @@
         function createFramePreview(index, frameData) {
             const frameEl = document.createElement('div');
             frameEl.className = `frame-preview bg-gray-200 flex-shrink-0 relative ${index === activeFrame ? 'active' : ''}`;
-            frameEl.style.backgroundImage = frameData ? `url(${frameData})` : '';
+            frameEl.style.backgroundImage = frameData ? `url(${frameData})` : 'none';
             frameEl.style.backgroundSize = 'contain';
             frameEl.style.backgroundPosition = 'center';
             frameEl.style.backgroundColor = '#fff';
@@ -1541,7 +1377,10 @@
                 if (isPlaying) {
                     pauseAnimation();
                 }
-                loadFrame(index);
+                saveActiveLayer();
+                activeFrame = index;
+                loadActiveLayer();
+                updateFramePreviews();
             });
 
             let longPressTimer;
@@ -1586,7 +1425,9 @@
                     if (isPlaying) {
                         pauseAnimation();
                     }
-                    loadFrame(index);
+                    saveActiveLayer();
+                    activeFrame = index;
+                    loadActiveLayer();
                 }
                 setTimeout(() => { isLongPress = false; }, 100);
             });
@@ -1631,27 +1472,54 @@
 
             framesContainer.appendChild(frameEl);
         }
-
+        
         addFrameBtn.addEventListener('click', () => {
             if (isPlaying) {
                 pauseAnimation();
             }
             addFrame();
         });
-
+        
         async function playAnimation() {
             if (isPlaying) return;
             if (frames.length === 0) return;
             isPlaying = true;
             playBtn.innerHTML = pauseIcon;
-            let currentFrameIndex = activeFrame;
-
+            
             // Precargar todas las imágenes para una reproducción fluida
-            const frameImages = await Promise.all(frames.map(frame => renderFrameToImage(frame.layers)));
+            const frameImages = await Promise.all(frames.map(frame => {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                return new Promise(async (resolve) => {
+                    const layersToDraw = frame.layers.filter(layer => layer.visible);
+                    for (const layer of layersToDraw) {
+                        if (layer.data) {
+                            const img = new Image();
+                            img.src = layer.data;
+                            await new Promise(res => img.onload = res);
+                            tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+                        }
+                    }
+                    resolve(tempCanvas.toDataURL());
+                });
+            }));
 
+            let currentFrameIndex = 0;
             animationInterval = setInterval(() => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                };
+                img.src = frameImages[currentFrameIndex];
+                
+                activeFrame = currentFrameIndex;
+                updateFramePreviews();
+
                 currentFrameIndex = (currentFrameIndex + 1) % frames.length;
-                loadFrame(currentFrameIndex);
             }, 1000 / fps);
         }
 
@@ -1659,6 +1527,9 @@
             isPlaying = false;
             playBtn.innerHTML = playIcon;
             clearInterval(animationInterval);
+            if (frames.length > 0) {
+                loadActiveLayer();
+            }
         }
 
         playBtn.addEventListener('click', () => {
@@ -1672,9 +1543,8 @@
         onionSkinBtn.addEventListener('click', () => {
             onionSkinActive = !onionSkinActive;
             onionSkinBtn.classList.toggle('active', onionSkinActive);
-            loadFrame(activeFrame);
+            loadActiveLayer();
         });
-        onionSkinBtn.classList.add('active');
 
         // Layer Panel Logic
         layerBtn.addEventListener('click', () => {
@@ -1687,29 +1557,19 @@
         });
 
         addLayerBtn.addEventListener('click', () => {
-            // Guardar el estado actual de la capa activa antes de cambiar
-            saveFrame();
-
-            // Añadir una nueva capa vacía
+            saveActiveLayer();
             const newLayer = { id: Date.now(), visible: true, data: '' };
             frames[activeFrame].layers.splice(activeLayer + 1, 0, newLayer);
             activeLayer++;
-
-            // Dibuja la capa anterior en el canvas principal
-            redrawCanvasLayers(true);
-
-            renderLayers(); // Volver a renderizar la lista
+            loadActiveLayer();
+            renderLayers();
         });
 
-        // NUEVO: Función para seleccionar una capa
         function selectLayer(indexToSelect) {
-            saveFrame(); // Guardar el estado de la capa activa anterior
+            saveActiveLayer();
             activeLayer = indexToSelect;
-
-            // Renderizar todas las capas al canvas
-            redrawCanvasLayers(true);
-
-            renderLayers(); // Actualizar el panel de capas para reflejar el cambio
+            loadActiveLayer();
+            renderLayers();
         }
 
         function renderLayers() {
@@ -1776,8 +1636,8 @@
             }
 
             renderLayers();
-            redrawCanvasLayers(true);
-            saveFrame();
+            loadActiveLayer();
+            saveActiveLayer();
         }
 
         function setupLayerDragAndDrop() {
@@ -1805,31 +1665,29 @@
                 const newOrder = Array.from(list.children).map(el => frames[activeFrame].layers[el.dataset.index]);
                 frames[activeFrame].layers = newOrder;
                 renderLayers();
-                redrawCanvasLayers(true);
-                saveFrame();
+                loadActiveLayer();
+                saveActiveLayer();
             });
         }
 
         function toggleLayerVisibility(index) {
             frames[activeFrame].layers[index].visible = !frames[activeFrame].layers[index].visible;
             renderLayers();
-            redrawCanvasLayers(true);
-            saveFrame();
+            loadActiveLayer();
+            saveActiveLayer();
         }
 
-        // Abrir proyecto existente
         function openProject(index) {
             currentProjectIndex = index;
             const project = projects[index];
             frames = project.frames && project.frames.length ? JSON.parse(JSON.stringify(project.frames)) : [{ layers: [{ id: Date.now(), visible: true, data: '' }] }];
             activeFrame = 0;
+            activeLayer = 0;
 
-            setCanvasSizeToContainer();
             showDesignScreen();
 
             setTimeout(() => {
-                initCanvas();
-                loadFrame(activeFrame);
+                loadActiveLayer();
                 updateFramePreviews();
             }, 100);
         }
@@ -1871,7 +1729,7 @@
                 pauseAnimation();
             }
 
-            saveFrame();
+            saveActiveLayer();
             const newFrame = JSON.parse(JSON.stringify(frames[frameIndex]));
             frames.splice(frameIndex + 1, 0, newFrame);
 
@@ -1892,7 +1750,9 @@
             if (isPlaying) {
                 pauseAnimation();
             }
-
+            
+            saveActiveLayer();
+            
             frames.splice(frameIndex, 1);
 
             if (frameIndex <= activeFrame) {
@@ -1902,7 +1762,7 @@
                 activeFrame = frames.length - 1;
             }
 
-            loadFrame(activeFrame);
+            loadActiveLayer();
             updateFramePreviews();
             saveToLocalStorage();
 
@@ -1916,6 +1776,8 @@
             if (isPlaying) {
                 pauseAnimation();
             }
+            
+            saveActiveLayer();
 
             const draggedFrame = frames.splice(fromIndex, 1)[0];
             frames.splice(toIndex, 0, draggedFrame);
@@ -1931,42 +1793,61 @@
             updateFramePreviews();
             saveToLocalStorage();
         }
-
+        
+        // Save to localStorage
         function saveToLocalStorage() {
             saveCurrentProject();
-            localStorage.setItem('flipaclip_projects', JSON.stringify(projects));
+            localStorage.setItem('zenimation_projects', JSON.stringify(projects));
         }
-
+        
+        // Load from localStorage
         function loadFromLocalStorage() {
-            const savedProjects = localStorage.getItem('flipaclip_projects');
+            const savedProjects = localStorage.getItem('zenimation_projects');
+            // Check for older 'flipaclip_projects' key and migrate if found
+            const oldSavedProjects = localStorage.getItem('flipaclip_projects');
+
             if (savedProjects) {
                 try {
                     projects = JSON.parse(savedProjects);
                 } catch (e) {
-                    console.error('Error loading projects from localStorage:', e);
+                    console.error('Error loading Zenimation projects from localStorage:', e);
+                    projects = [];
                 }
+            } else if (oldSavedProjects) {
+                try {
+                    projects = JSON.parse(oldSavedProjects);
+                    // Update key for future saves
+                    localStorage.setItem('zenimation_projects', JSON.stringify(projects));
+                    localStorage.removeItem('flipaclip_projects');
+                } catch (e) {
+                    console.error('Error loading old FlipaClip projects from localStorage:', e);
+                    projects = [];
+                }
+            } else {
+                projects = [];
             }
         }
 
         function saveCurrentProject() {
-            if (currentProjectIndex === null) return;
+            if (currentProjectIndex === null || !projects[currentProjectIndex]) return;
 
-            // Guardar el estado actual de la capa activa antes de guardar el proyecto
-            frames[activeFrame].layers[activeLayer].data = canvas.toDataURL();
-
+            saveActiveLayer();
+            
+            // Set the frames for the current project
             projects[currentProjectIndex].frames = frames.slice();
-
-            // Re-renderizar la miniatura del primer fotograma
-            renderFrameToImage(0).then(imgData => {
-                if (imgData) {
-                    projects[currentProjectIndex].img = imgData;
+            
+            // Generate and re-render the thumbnail of the first frame
+            updateFramePreviews().then(() => {
+                const firstFrameImg = framesContainer.querySelector('.frame-preview')?.style.backgroundImage;
+                if (firstFrameImg) {
+                    projects[currentProjectIndex].img = firstFrameImg.replace(/url\("(.*)"\)/, '$1');
                 }
+                
+                const totalSeconds = Math.ceil(frames.length / fps);
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                projects[currentProjectIndex].time = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             });
-
-            const totalSeconds = Math.ceil(frames.length / fps);
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            projects[currentProjectIndex].time = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }
 
         window.onload = () => {
@@ -1977,3 +1858,4 @@
     </script>
 </body>
 </html>
+
