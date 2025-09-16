@@ -16,7 +16,7 @@
             -moz-user-select: none;
             -ms-user-select: none;
             user-select: none;
-            touch-action: none;
+            touch-action: pan-y;
             overflow: hidden;
             background-color: #f3f4f6;
         }
@@ -52,6 +52,9 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .tool-button.active {
@@ -150,11 +153,23 @@
             padding: 1rem;
         }
 
-        .timeline-container {
+        .timeline-container, .tool-carousel {
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             margin-bottom: 1rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 0.5rem;
+            scrollbar-width: none; /* Firefox */
+        }
+
+        .timeline-container::-webkit-scrollbar, .tool-carousel::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
+        }
+        
+        .tool-carousel > div, .tool-carousel > button {
+            flex-shrink: 0;
         }
 
         .layer-panel {
@@ -219,7 +234,7 @@
             right: 0;
         }
 
-        .frame-context-menu {
+        .context-menu {
             position: absolute;
             background: white;
             border-radius: 8px;
@@ -227,12 +242,21 @@
             z-index: 100;
             min-width: 120px;
             padding: 8px 0;
+        }
+        
+        .project-context-menu {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .frame-context-menu {
             top: -80px;
             left: 50%;
             transform: translateX(-50%);
         }
 
-        .frame-context-menu::before {
+        .context-menu::before {
             content: '';
             position: absolute;
             top: 100%;
@@ -242,7 +266,7 @@
             border-top-color: white;
         }
 
-        .frame-context-menu button {
+        .context-menu button {
             width: 100%;
             text-align: left;
             padding: 8px 16px;
@@ -253,11 +277,11 @@
             transition: background-color 0.2s;
         }
 
-        .frame-context-menu button:hover {
+        .context-menu button:hover {
             background-color: #f3f4f6;
         }
 
-        .frame-context-menu button.delete:hover {
+        .context-menu button.delete:hover {
             background-color: #fee2e2;
             color: #dc2626;
         }
@@ -272,50 +296,17 @@
             box-shadow: 0 0 0 2px #3b82f6;
         }
 
-        /* Sidebar styles */
-        #toolSidebar {
-            background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
-        }
-
-        #toolSidebar.open {
-            transform: translateX(0);
-        }
-
-        .sidebar-tool {
-            width: 48px;
-            height: 48px;
-            background-color: rgba(75, 85, 99, 0.5);
-            color: #d1d5db;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .sidebar-tool:hover {
-            background-color: rgba(99, 102, 241, 0.3);
-            color: white;
-            transform: scale(1.05);
-        }
-
-        .sidebar-tool.active {
-            background-color: #6366f1;
-            color: white;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-        }
-
+        /* Tool styles */
         #brushSize {
             width: 60px;
+            transform: rotate(270deg);
         }
 
         #brushSize::-webkit-slider-thumb {
             appearance: none;
             width: 16px;
             height: 16px;
-            background: #6366f1;
+            background: #ef4444;
             border-radius: 50%;
             cursor: pointer;
         }
@@ -323,7 +314,7 @@
         #brushSize::-moz-range-thumb {
             width: 16px;
             height: 16px;
-            background: #6366f1;
+            background: #ef4444;
             border-radius: 50%;
             cursor: pointer;
             border: none;
@@ -342,21 +333,6 @@
             box-shadow: 0 0 0 2px white;
         }
 
-        @media (min-width: 768px) {
-            #drawingArea.sidebar-open {
-                margin-left: 80px;
-            }
-        }
-
-        @media (max-width: 767px) {
-            #toolSidebar {
-                width: 70px;
-            }
-
-            #drawingArea.sidebar-open {
-                margin-left: 70px;
-            }
-        }
     </style>
 </head>
 <body>
@@ -466,76 +442,10 @@
                     <i class="fas fa-ellipsis-v text-gray-600 cursor-pointer"></i>
                 </div>
             </div>
-            <!-- Barra de herramientas simplificada -->
-            <div class="flex justify-around p-4 relative">
-                <button id="toggleToolbarBtn" class="tool-button">
-                    <i class="fas fa-toolbox text-xl"></i>
-                </button>
-                <button id="playBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-semibold">
-                    <i class="fas fa-play"></i> Reproducir
-                </button>
-                <button id="onionSkinBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full">
-                    <i class="fas fa-layer-group"></i>
-                </button>
-                <button id="addFrameBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full">
-                    <i class="fas fa-plus"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Barra lateral de herramientas -->
-        <div id="toolSidebar" class="fixed left-0 top-0 w-20 h-full bg-gray-800 shadow-lg z-40 transform -translate-x-full transition-transform duration-300">
-            <div class="flex flex-col items-center py-4 space-y-4 mt-20">
-                <!-- Herramientas principales -->
-                <button id="brushTool" class="sidebar-tool active" data-tool="brush">
-                    <i class="fas fa-paint-brush text-xl"></i>
-                </button>
-                <button id="eraserTool" class="sidebar-tool" data-tool="eraser">
-                    <i class="fas fa-eraser text-xl"></i>
-                </button>
-                <button id="paintBucketTool" class="sidebar-tool" data-tool="paintBucket">
-                    <i class="fas fa-fill-drip text-xl"></i>
-                </button>
-                <button id="lassoTool" class="sidebar-tool" data-tool="lasso">
-                    <i class="fas fa-draw-polygon text-xl"></i>
-                </button>
-
-                <!-- Divisor -->
-                <div class="w-12 h-px bg-gray-600"></div>
-
-                <!-- Control de grosor -->
-                <div class="flex flex-col items-center space-y-2">
-                    <i class="fas fa-circle text-xs text-gray-400"></i>
-                    <input type="range" id="brushSize" min="1" max="50" value="5"
-                           class="w-12 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer transform -rotate-90 origin-center">
-                    <span id="brushSizeDisplay" class="text-xs text-white">5</span>
-                </div>
-
-                <!-- Divisor -->
-                <div class="w-12 h-px bg-gray-600"></div>
-
-                <!-- Color actual -->
-                <div class="flex flex-col items-center space-y-2">
-                    <div id="currentColorDisplay" class="w-8 h-8 bg-black border-2 border-white rounded-full cursor-pointer"></div>
-                    <input type="color" id="colorPicker" value="#000000" class="opacity-0 absolute pointer-events-none">
-                </div>
-
-                <!-- Paleta de colores -->
-                <div class="grid grid-cols-2 gap-1 mt-2">
-                    <div class="color-preset w-6 h-6 bg-black rounded cursor-pointer" data-color="#000000"></div>
-                    <div class="color-preset w-6 h-6 bg-white border border-gray-400 rounded cursor-pointer" data-color="#ffffff"></div>
-                    <div class="color-preset w-6 h-6 bg-red-500 rounded cursor-pointer" data-color="#ef4444"></div>
-                    <div class="color-preset w-6 h-6 bg-blue-500 rounded cursor-pointer" data-color="#3b82f6"></div>
-                    <div class="color-preset w-6 h-6 bg-green-500 rounded cursor-pointer" data-color="#10b981"></div>
-                    <div class="color-preset w-6 h-6 bg-yellow-500 rounded cursor-pointer" data-color="#f59e0b"></div>
-                    <div class="color-preset w-6 h-6 bg-purple-500 rounded cursor-pointer" data-color="#8b5cf6"></div>
-                    <div class="color-preset w-6 h-6 bg-pink-500 rounded cursor-pointer" data-color="#ec4899"></div>
-                </div>
-            </div>
         </div>
 
         <!-- Área de dibujo y animación -->
-        <div class="flex-grow flex justify-center items-center transition-all duration-300 px-2 pt-4 pb-4" id="drawingArea" style="width:100%; min-height: calc(100vh - 280px);">
+        <div class="flex-grow flex justify-center items-center px-2 pt-28 pb-4" id="drawingArea" style="width:100%; min-height: calc(100vh - 280px);">
             <div id="canvasWrapper" class="canvas-container bg-white rounded-lg shadow-inner">
                 <canvas id="onionSkinCanvas"></canvas>
                 <canvas id="drawingCanvas"></canvas>
@@ -545,16 +455,70 @@
 
         <!-- Controles inferiores de diseño -->
         <div class="controls-bottom-bar flex flex-col">
+            <!-- Carrusel de herramientas -->
+            <div class="tool-carousel flex items-center space-x-4 px-2 pb-2 border-b border-gray-200">
+                <button id="brushTool" class="tool-button w-12 h-12 active" data-tool="brush">
+                    <i class="fas fa-paint-brush text-xl"></i>
+                </button>
+                <button id="eraserTool" class="tool-button w-12 h-12" data-tool="eraser">
+                    <i class="fas fa-eraser text-xl"></i>
+                </button>
+                <button id="paintBucketTool" class="tool-button w-12 h-12" data-tool="paintBucket">
+                    <i class="fas fa-fill-drip text-xl"></i>
+                </button>
+                <button id="lassoTool" class="tool-button w-12 h-12" data-tool="lasso">
+                    <i class="fas fa-draw-polygon text-xl"></i>
+                </button>
+                
+                <!-- Separador visual -->
+                <div class="w-px h-10 bg-gray-300 flex-shrink-0"></div>
+
+                <!-- Control de grosor -->
+                <div class="flex flex-col items-center space-y-2 flex-shrink-0">
+                    <i class="fas fa-circle text-xs text-gray-400"></i>
+                    <input type="range" id="brushSize" min="1" max="50" value="5"
+                           class="w-12 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    <span id="brushSizeDisplay" class="text-xs text-gray-700">5</span>
+                </div>
+
+                <!-- Separador visual -->
+                <div class="w-px h-10 bg-gray-300 flex-shrink-0"></div>
+
+                <!-- Color actual y paleta de colores -->
+                <div class="flex items-center space-x-2 flex-shrink-0">
+                    <div id="currentColorDisplay" class="w-8 h-8 bg-black border-2 border-white rounded-full shadow-md cursor-pointer flex-shrink-0"></div>
+                    <input type="color" id="colorPicker" value="#000000" class="opacity-0 absolute pointer-events-none w-0 h-0">
+                    <div class="grid grid-cols-2 gap-1 flex-shrink-0">
+                        <div class="color-preset w-6 h-6 bg-black rounded-md cursor-pointer" data-color="#000000"></div>
+                        <div class="color-preset w-6 h-6 bg-white border border-gray-400 rounded-md cursor-pointer" data-color="#ffffff"></div>
+                        <div class="color-preset w-6 h-6 bg-red-500 rounded-md cursor-pointer" data-color="#ef4444"></div>
+                        <div class="color-preset w-6 h-6 bg-blue-500 rounded-md cursor-pointer" data-color="#3b82f6"></div>
+                        <div class="color-preset w-6 h-6 bg-green-500 rounded-md cursor-pointer" data-color="#10b981"></div>
+                        <div class="color-preset w-6 h-6 bg-yellow-500 rounded-md cursor-pointer" data-color="#f59e0b"></div>
+                        <div class="color-preset w-6 h-6 bg-purple-500 rounded-md cursor-pointer" data-color="#8b5cf6"></div>
+                        <div class="color-preset w-6 h-6 bg-pink-500 rounded-md cursor-pointer" data-color="#ec4899"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Carrusel de fotogramas -->
             <div class="timeline-container w-full overflow-x-auto pb-2">
                 <div id="framesContainer" class="flex items-center space-x-2 px-2 min-w-full">
                     <!-- Fotogramas se renderizarán aquí -->
                 </div>
             </div>
+            
+            <!-- Controles de animación y herramientas de gestión -->
             <div class="flex justify-around items-center py-4 border-t border-gray-200">
-                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
-                    <i class="fas fa-music text-xl"></i>
-                    <span class="text-xs mt-1">AUDIO</span>
-                </div>
+                <button id="playBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-full font-semibold">
+                    <i class="fas fa-play"></i> Reproducir
+                </button>
+                <button id="onionSkinBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full">
+                    <i class="fas fa-layer-group"></i>
+                </button>
+                <button id="addFrameBtn" class="bg-gray-200 text-gray-700 p-2 rounded-full">
+                    <i class="fas fa-plus"></i>
+                </button>
                 <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="undoBtn">
                     <i class="fas fa-undo text-xl"></i>
                     <span class="text-xs mt-1">DESHACER</span>
@@ -562,14 +526,6 @@
                 <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="redoBtn">
                     <i class="fas fa-redo text-xl"></i>
                     <span class="text-xs mt-1">REHACER</span>
-                </div>
-                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
-                    <i class="fas fa-copy text-xl"></i>
-                    <span class="text-xs mt-1">COPIAR</span>
-                </div>
-                <div class="flex flex-col items-center text-gray-400 cursor-pointer">
-                    <i class="fas fa-paste text-xl"></i>
-                    <span class="text-xs mt-1">PEGAR</span>
                 </div>
                 <div class="flex flex-col items-center text-gray-400 cursor-pointer" id="layerBtn">
                     <i class="fas fa-layer-group text-xl"></i>
@@ -619,9 +575,6 @@
         const onionSkinCtx = onionSkinCanvas.getContext('2d');
         const selectionCanvas = document.getElementById('selectionCanvas');
         const selectionCtx = selectionCanvas.getContext('2d');
-        const toolSidebar = document.getElementById('toolSidebar');
-        const toggleToolbarBtn = document.getElementById('toggleToolbarBtn');
-        const drawingArea = document.getElementById('drawingArea');
         const brushToolBtn = document.getElementById('brushTool');
         const eraserToolBtn = document.getElementById('eraserTool');
         const paintBucketToolBtn = document.getElementById('paintBucketTool');
@@ -637,7 +590,7 @@
         const addFrameBtn = document.getElementById('addFrameBtn');
         const playBtn = document.getElementById('playBtn');
         const onionSkinBtn = document.getElementById('onionSkinBtn');
-        const sidebarTools = document.querySelectorAll('.sidebar-tool');
+        const toolButtons = document.querySelectorAll('.tool-button[data-tool]');
         const deleteSelectionBtn = document.getElementById('deleteSelectionBtn');
         const layerBtn = document.getElementById('layerBtn');
         const layerPanel = document.getElementById('layerPanel');
@@ -803,10 +756,89 @@
                     </div>
                 `;
                 projectCard.insertBefore(previewImg, projectCard.firstChild);
-                projectCard.addEventListener('click', () => openProject(idx));
+                projectCard.addEventListener('click', (e) => {
+                    if (e.target.closest('.context-menu')) {
+                        return;
+                    }
+                    openProject(idx);
+                });
+
+                // Añadir evento para presionar largo (móvil y desktop)
+                let longPressTimer;
+                const clearPressTimer = () => clearTimeout(longPressTimer);
+                const startPressTimer = (e) => {
+                    clearPressTimer();
+                    longPressTimer = setTimeout(() => {
+                        showProjectContextMenu(e, idx);
+                    }, 500);
+                };
+
+                projectCard.addEventListener('touchstart', startPressTimer);
+                projectCard.addEventListener('touchend', clearPressTimer);
+                projectCard.addEventListener('touchcancel', clearPressTimer);
+                projectCard.addEventListener('mousedown', startPressTimer);
+                projectCard.addEventListener('mouseup', clearPressTimer);
+                projectCard.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    showProjectContextMenu(e, idx);
+                });
+
                 proyectosContent.appendChild(projectCard);
             });
         }
+
+        function showProjectContextMenu(event, projectIndex) {
+            const existingMenu = document.querySelector('.context-menu');
+            if (existingMenu) existingMenu.remove();
+
+            const menu = document.createElement('div');
+            menu.className = 'context-menu project-context-menu';
+            menu.innerHTML = `
+                <button onclick="duplicateProject(${projectIndex}); event.stopPropagation();">
+                    <i class="fas fa-copy mr-2"></i>Duplicar
+                </button>
+                <button class="delete" onclick="deleteProject(${projectIndex}); event.stopPropagation();">
+                    <i class="fas fa-trash mr-2"></i>Eliminar
+                </button>
+            `;
+            document.body.appendChild(menu);
+
+            // Posicionar el menú cerca del toque o clic
+            const x = (event.touches && event.touches[0] ? event.touches[0].clientX : event.clientX);
+            const y = (event.touches && event.touches[0] ? event.touches[0].clientY : event.clientY);
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+
+            // Cerrar el menú al hacer clic fuera
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target)) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 100);
+        }
+
+        function duplicateProject(index) {
+            const projectToDuplicate = projects[index];
+            const newProject = JSON.parse(JSON.stringify(projectToDuplicate));
+            newProject.name = `Copia de ${newProject.name}`;
+            projects.splice(index + 1, 0, newProject);
+            saveToLocalStorage();
+            renderProjects();
+            const menu = document.querySelector('.context-menu');
+            if (menu) menu.remove();
+        }
+
+        function deleteProject(index) {
+            projects.splice(index, 1);
+            saveToLocalStorage();
+            renderProjects();
+            const menu = document.querySelector('.context-menu');
+            if (menu) menu.remove();
+        }
+
 
         function setActiveTab(activeTab) {
             const tabs = [proyectosTab, peliculasTab];
@@ -956,7 +988,7 @@
             const newColor = [
                 parseInt(hex.substr(0, 2), 16),
                 parseInt(hex.substr(2, 2), 16),
-                parseInt(hex.substr(4, 2), 16),
+                parseInt(hex.substr(4, 4), 16),
                 255
             ];
 
@@ -1182,7 +1214,7 @@
         // Tool Logic
         function selectTool(tool) {
             currentTool = tool;
-            sidebarTools.forEach(btn => btn.classList.remove('active'));
+            toolButtons.forEach(btn => btn.classList.remove('active'));
 
             selectionCtx.clearRect(0, 0, selectionCanvas.width, selectionCanvas.height);
             deleteSelectionBtn.classList.add('hidden');
@@ -1208,13 +1240,8 @@
                 canvas.style.cursor = 'crosshair';
             }
         }
-
-        toggleToolbarBtn.addEventListener('click', () => {
-            toolSidebar.classList.toggle('open');
-            drawingArea.classList.toggle('sidebar-open');
-        });
-
-        sidebarTools.forEach(tool => {
+        
+        toolButtons.forEach(tool => {
             tool.addEventListener('click', () => {
                 selectTool(tool.dataset.tool);
             });
@@ -1699,7 +1726,7 @@
             }
 
             const menu = document.createElement('div');
-            menu.className = 'frame-context-menu';
+            menu.className = 'context-menu frame-context-menu';
             menu.innerHTML = `
                 <button onclick="duplicateFrame(${frameIndex}); event.stopPropagation();">
                     <i class="fas fa-copy mr-2"></i>Duplicar
@@ -1854,6 +1881,7 @@
             loadFromLocalStorage();
             renderProjects();
             setActiveTab(proyectosTab);
+            selectTool('brush'); // Asegurar que el pincel esté seleccionado al inicio
         };
     </script>
 </body>
